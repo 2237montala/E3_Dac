@@ -33,11 +33,12 @@ const int interval = 10; //in millis
 
 //Other Settings
 const byte recordSwitch = 3;
-bool firstStop = 0;
+bool stop = 0;
+bool startUp = 1;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
-String generateFileName(String fh,int cs);
+String generateFileName(String fh,int cs, bool skipSDInit);
 
 void setup() {
   //Initialize values in array to -1
@@ -47,7 +48,9 @@ void setup() {
   }
   Serial.begin(9600);
   pinMode(recordSwitch, INPUT_PULLUP);
-  pinMode(13,OUTPUT);
+  pinMode(LED_BUILTIN,OUTPUT);
+
+  digitalWrite(LED_BUILTIN, LOW);
 
   //Neopixel start up code
   //mphDial.setBrightness(25);
@@ -59,12 +62,19 @@ void setup() {
 
 
   //Check if sd card is present
-  fileName = generateFileName(fileHeader,chipSelect);
+  fileName = generateFileName(fileHeader,chipSelect,false);
   if(fileName.compareTo("") == 0)
   {
     //Card error
     Serial.println("SD Error");
-    while(1);
+    while(1)
+    {
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(1000);
+      digitalWrite(LED_BUILTIN,LOW);
+      delay(1000);
+    }
+
   }
 
 }
@@ -73,17 +83,19 @@ void loop() {
   if(digitalRead(recordSwitch))
   {
     unsigned long currentTime = millis();
-    if(firstStop == 1)
+    if(stop == 1)
       {
-        digitalWrite(13,HIGH);
-        firstStop = 0;
+        digitalWrite(LED_BUILTIN,HIGH);
+        stop = 0;
+        Serial.println(stop);
       }
 
     if(currentTime - previousMillis >= interval)
     {
       //Collect data
 
-      //In theory both rpm collections should be 2 ms @ 10 samples each
+      //In theory both rpm collections should be 3 ms @ 10 samples each
+      //with 50 microsecond delay between samples
       engineRPM = getRPM(engineRPMPin,10);
       secondRPM = getRPM(secondRPMPin,10);
 
@@ -109,12 +121,13 @@ void loop() {
 
     }
   }
-  else if(digitalRead(recordSwitch) && !firstStop)
+  else if(!stop && !digitalRead(recordSwitch))
   {
     Serial.println("Not recording");
-    firstStop = 1;
-    digitalWrite(13,LOW);
-    fileName = generateFileName(fileHeader,chipSelect);
+    stop = 1;
+    Serial.println(stop);
+    digitalWrite(LED_BUILTIN,LOW);
+    fileName = generateFileName(fileHeader,chipSelect,true);
   }
 }
 
@@ -122,6 +135,7 @@ int getRPM(int pin, int samples)
 {
   int avgRPM = 0;
   for(int i = 0; i < samples; i++)
+    delayMicroseconds(50);
     avgRPM += analogRead(pin);
   return avgRPM/samples;
 }
@@ -136,11 +150,20 @@ void writeData(int arrayLength, String fileName)
   }
 }
 
-String generateFileName(String fh,int cs)
+String generateFileName(String fh,int cs, bool skipSDInit)
 {
   int fileHeaderCount = 0;
   String fn;
-  if(SD.begin(cs))
+  bool sdReady;
+
+  //Run look if start up is false or the SD library hasn't been
+  //initalized yet
+  if(!skipSDInit)
+    sdReady = SD.begin(cs);
+  else
+    sdReady = true;
+
+  if(sdReady)
   {
     //SD card is present
     //Check for other files and create new one
