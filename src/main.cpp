@@ -1,25 +1,28 @@
 #include <Arduino.h>
-#include <Adafruit_NeoPixel.h>
-#include <TM1637Display.h>
+#include <FastLED.h>
 #include <SD.h>
 
 int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
-#define reduction 3 //Gear box rpm reduction
-const float wheelCircum = 4.712; //in feet
+//Actual value is 9.48 but decimals are slow in math
+const int reduction = 9.48 * 100; //Gear box rpm reduction
+
+//Actual value is 4.712 but decimals are slow in math
+const int wheelCircum = 4.712 * 1000; //in feet
 
 #define rpmArrayLen 100
 int rpmArray[rpmArrayLen]; //Array of rpms to be saved
 byte collectionCounter = 0;
 
 //Each dial has 24 leds but to make it look like a dial we only use 18
-byte numLED = 18;
-byte mphDialPin = 6;
-byte rpmDialPin = 7;
-//Adafruit_NeoPixel mphDial = Adafruit_NeoPixel(numLED, mphDialPin, NEO_GRBW + NEO_KHZ800);
-//Adafruit_NeoPixel rpmDial = Adafruit_NeoPixel(numLED, rpmDialPin, NEO_GRBW + NEO_KHZ800);
+#define NUM_LEDS 48
+#define DATA_PIN 6
+CRGB leds[NUM_LEDS];
+int engLEDMax = 0;
+int mphLEDMax = 0;
+
 
 //SD Card
 File dataFile;
@@ -29,7 +32,8 @@ const byte chipSelect = 53;
 
 //Loop settings
 unsigned long previousMillis = 0;
-const int interval = 10; //in millis
+const int recordInerval = 10; //in millis
+const int ledInerval = 30; //in millis
 
 //Other Settings
 const byte recordSwitch = 3;
@@ -39,6 +43,7 @@ bool startUp = 1;
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
 String generateFileName(String fh,int cs, bool skipSDInit);
+int updateLED(int numLED, int maxLEDNum);
 
 void setup() {
   //Initialize values in array to -1
@@ -51,15 +56,6 @@ void setup() {
   pinMode(LED_BUILTIN,OUTPUT);
 
   digitalWrite(LED_BUILTIN, LOW);
-
-  //Neopixel start up code
-  //mphDial.setBrightness(25);
-  //mphDial.begin();
-  //mphDial.show(); // Initialize all pixels to 'off'
-  //rpmDial.setBrightness(25);
-  //rpmDial.begin();
-  //rpmDial.show();
-
 
   //Check if sd card is present
   fileName = generateFileName(fileHeader,chipSelect,false);
@@ -74,8 +70,10 @@ void setup() {
       digitalWrite(LED_BUILTIN,LOW);
       delay(1000);
     }
-
   }
+
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+  FastLED.setBrightness(225* 0.4);
 
 }
 
@@ -90,7 +88,7 @@ void loop() {
         Serial.println(stop);
       }
 
-    if(currentTime - previousMillis >= interval)
+    if(currentTime - previousMillis >= recordInerval)
     {
       //Collect data
 
@@ -112,13 +110,25 @@ void loop() {
         Serial.println("Data Saved");
       }
 
-      //int halfShaftRPM = (secondRPM / reduction);
-
       //Calculate Values
       //float mph = (wheelCircum * halfShaftRPM)/88; //Unrounded mph
       //mph = float(long(mph*100)/100); //Rounded to 2 decimal places
 
+      if(currentTime - previousMillis >= ledInerval)
+      {
+        //Calculate Values extra 1000 is for wheelCircum
+        int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
+        //mph = float(long(mph*100)/100); //Rounded to 2 decimal places
 
+          //Update the led rings
+          int numLEDtoLight = map8(engineRPM, 0, 18);
+          //Update the leds and set the max led to a new value
+          engLEDMax += updateLED(numLEDtoLight,engLEDMax);
+
+          numLEDtoLight = map8(mph, 0, 18);
+          //Update the leds and set the max led to a new value
+          mphLEDMax += updateLED(numLEDtoLight,mphLEDMax);
+      }
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
@@ -182,4 +192,26 @@ String generateFileName(String fh,int cs, bool skipSDInit)
     fn =  "";
   }
   return fn;
+}
+
+int updateLED(int numLED, int maxLEDNum)
+{
+  int diff = maxLEDNum - numLED;
+  if(diff > 0)
+  {
+    //Need to turn off leds
+    for(int i = numLED; i < maxLEDNum; i++)
+    {
+      leds[i] = 0;
+    }
+  }
+  else
+  {
+    //Need to add more on leds
+    for(int i = maxLEDNum; i < numLED; i++)
+    {
+      leds[i] = 0xFF44DD;
+    }
+  }
+  return diff;
 }
