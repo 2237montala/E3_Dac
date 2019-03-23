@@ -56,6 +56,7 @@ String generateFileName(String fh,int cs, bool skipSDInit);
 int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
+int milliToMinSec(long milli);
 
 void setup() {
   //analogReference(EXTERNAL);
@@ -95,7 +96,7 @@ void setup() {
   sevSeg = Adafruit_7segment();
   sevSeg.begin(0x70);
   sevSeg.setBrightness(16*.5);
-  sevSeg.print(8888, DEC);
+  sevSeg.print(0000, DEC);
   sevSeg.writeDisplay();
 
 }
@@ -109,6 +110,7 @@ void loop() {
         digitalWrite(LED_BUILTIN,HIGH);
         stop = 0;
         Serial.println(stop);
+        startTime = currentTime;
       }
     if(currentTime - prevMillisRec >= recordInerval)
     {
@@ -118,9 +120,6 @@ void loop() {
       //with 50 microsecond delay between samples
       engineRPM = getRPM(engineRPMPin,10);
       secondRPM = getRPM(secondRPMPin,10);
-      //Serial.println(engineRPM);
-
-      //Serial.println(engineRPM);
 
       rpmArray[collectionCounter] = engineRPM;
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
@@ -136,7 +135,6 @@ void loop() {
         //writeData(rpmArrayLen/2,fileName);
         collectionCounter = 0;
         Serial.println("Data Saved");
-        //Serial.println(currentTime);
         Serial.println(rpmArray[1]);
         Serial.println(rpmArray[51]);
         //Serial.println(currentTime);
@@ -145,6 +143,8 @@ void loop() {
     if(currentTime - prevMillisLED >= ledInerval)
     {
       prevMillisLED = currentTime;
+
+
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
       //int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
@@ -152,21 +152,31 @@ void loop() {
 
       //Update the led rings
       int numLEDtoLight = map(engineRPM,0,675,0,18);
-      //Serial.println(engineRPM);
-      //Serial.println(numLEDtoLight);
       //Update the leds and set the max led to a new value
       engLEDMax += updateRPMLED(6,numLEDtoLight,engLEDMax,1);
 
       numLEDtoLight = map(secondRPM,0,675,0,18);
-      //Serial.println(numLEDtoLight);
       //Update the leds and set the max led to a new value
       mphLEDMax += updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
-      //Display the leds
-
-
       //Update seven segment Display
-      sevSeg.print(currentTime/1000);
+      int currTime = milliToMinSec(currentTime-startTime);
+
+      for(int i = 0;i < 5; i++)
+      {
+        if(i < 2)
+        {
+          sevSeg.writeDigitNum(4-i,currTime % 10);
+          currTime = currTime / 10;
+        }
+
+        if(i >= 3)
+        {
+          sevSeg.writeDigitNum(4-i,currTime % 10);
+          currTime = currTime / 10;
+        }
+      }
+
       sevSeg.drawColon(true);
       sevSeg.writeDisplay();
     }
@@ -291,8 +301,8 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
   return 0;
 }
 
-  int updateRPMLED(int start, int numLED, int maxLED, int color)
-  {
+int updateRPMLED(int start, int numLED, int maxLED, int color)
+{
     start += 24;
     for(int i = start; i < start+24; i++)
     {
@@ -322,34 +332,14 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
     return 0;
   }
 
-  // int diff = maxLEDNum - numLED;
-  // if(diff == 0)
-  // {
-  //   return 0;
-  // }
-  // if(diff > 0)
-  // {
-  //   //Need to turn off leds
-  //   for(int i = startingLED + numLED; i > startingLED + maxLEDNum; i--)
-  //   {
-  //     leds[i] = 0;
-  //   }
-  //   FastLED.show();
-  //   Serial.println(diff);
-  //   return diff ;
-  // }
-  // else
-  // {
-  //   //Need to add more on leds
-  //   for(int i = startingLED + maxLEDNum; i < startingLED + numLED; i++)
-  //   {
-  //     leds[i] = 0xFF44DD;
-  //   }
-  //
-  //   FastLED.show();
-  //   Serial.println(diff);
-  //   return diff * -1;
-  // }
 int map(int x, int in_min, int in_max, int out_min, int out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+int  milliToMinSec(long milli)
+{
+  int sec = (milli/1000 % 60);
+  int min = (milli/60000) * 100;
+  //Serial.println(min + sec);
+  return min + sec;
 }
