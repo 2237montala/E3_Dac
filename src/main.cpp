@@ -245,51 +245,47 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
 
   if(color == 1)
   {
-    for(int i = 12; i < numLED+12;i++)
-    {
-      if(i >= 12 && i < 15)
-      {
-        leds[i].r=225;
-      }
-      else if(i > 14 && i < 20)
-      {
-        leds[i].g=255;
-        leds[i].r=255;
-      }
-      else if(i > 19 && i < 24)
-      {
-        leds[i].g = 255;
-      }
-      else if(i > 23)
-      {
-        leds[(24-i)*-1].g = 255;
-      }
-    }
-    /**
-    for(int i = 0;i < numLED;i++)
+    for(int i = 0;i< numLED;i++)
     {
       if(i < 6)
       {
         leds[5-i].g = 255;
       }
-      else if(i > 6 && i < 11)
+      else if(i > 5 && i < 10)
       {
-        leds[30-i].g=255;
+        leds[24+5-i].g = 255;
       }
-      else if(i > 10 && i < 16)
+      else if(i > 9 && i < 15)
       {
-        leds[30-i].g=255;
-        leds[30-i].r=255;
+        leds[24+5-i].g = 255;
+        leds[24+5-i].r = 255;
       }
-      //else if(i > 15 && i < 19)
-      //{
-      //  leds[30-i].r = 255;
-      //}
-      else
+      else if(i > 14 && i < 18)
       {
-        leds[30-i].r=255;
-      }**/
-    //}
+        leds[24+5-i].r = 255;
+      }
+    }
+
+    // for(int i = 12; i < numLED+12;i++)
+    // {
+    //   if(i >= 12 && i < 15)
+    //   {
+    //     leds[i].r=225;
+    //   }
+    //   else if(i > 14 && i < 20)
+    //   {
+    //     leds[i].g=255;
+    //     leds[i].r=255;
+    //   }
+    //   else if(i > 19 && i < 24)
+    //   {
+    //     leds[i].g = 255;
+    //   }
+    //   else if(i > 23)
+    //   {
+    //     leds[(24-i)*-1].g = 255;
+    //   }
+    // }
   }
   FastLED.show();
   return 0;
