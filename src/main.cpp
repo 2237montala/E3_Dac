@@ -37,9 +37,11 @@ String fileHeader = "Sample_";
 const byte chipSelect = 53;
 
 //Loop settings
-unsigned long previousMillis = 0;
+unsigned long prevMillisRec = 0;
+unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
 const int ledInerval = 30; //in millis
+unsigned long startTime = 0;
 
 //Other Settings
 const byte recordSwitch = 3;
@@ -51,9 +53,14 @@ const byte rightBut = 7;
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
 String generateFileName(String fh,int cs, bool skipSDInit);
-int updateLED(int numLED, int maxLEDNum);
+int updateMPHLED(int start, int numLED, int maxLED, int color);
+int map(int x, int in_min, int in_max, int out_min, int out_max);
+int updateRPMLED(int start, int numLED, int maxLED, int color);
 
 void setup() {
+  //analogReference(EXTERNAL);
+
+
   //Initialize values in array to -1
   for(int i = 0; i < rpmArrayLen; i++)
   {
@@ -81,9 +88,15 @@ void setup() {
   }
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* 0.4);
+  FastLED.setBrightness(225* 0.1);
+  leds[1].red = 255;
+  FastLED.show();
 
   sevSeg = Adafruit_7segment();
+  sevSeg.begin(0x70);
+  sevSeg.setBrightness(16*.5);
+  sevSeg.print(8888, DEC);
+  sevSeg.writeDisplay();
 
 }
 
@@ -97,49 +110,65 @@ void loop() {
         stop = 0;
         Serial.println(stop);
       }
-    if(currentTime - previousMillis >= recordInerval)
+    if(currentTime - prevMillisRec >= recordInerval)
     {
       //Collect data
-
+      prevMillisRec = currentTime;
       //In theory both rpm collections should be 3 ms @ 10 samples each
       //with 50 microsecond delay between samples
       engineRPM = getRPM(engineRPMPin,10);
       secondRPM = getRPM(secondRPMPin,10);
+      //Serial.println(engineRPM);
+
+      //Serial.println(engineRPM);
 
       rpmArray[collectionCounter] = engineRPM;
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
       collectionCounter++;
 
+
+
       if(collectionCounter > rpmArrayLen/2)
       {
-        //After 100 cycles it should be about 1 second per write
+
+        //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
-        writeData(rpmArrayLen/2,fileName);
+        //writeData(rpmArrayLen/2,fileName);
         collectionCounter = 0;
         Serial.println("Data Saved");
+        //Serial.println(currentTime);
+        Serial.println(rpmArray[1]);
+        Serial.println(rpmArray[51]);
+        //Serial.println(currentTime);
       }
     }
-    else if(currentTime - previousMillis >= ledInerval)
+    if(currentTime - prevMillisLED >= ledInerval)
     {
+      prevMillisLED = currentTime;
+      //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
-      int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
+      //int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
+      //Serial.println(mph);
 
       //Update the led rings
-      int numLEDtoLight = map8(engineRPM, 0, 18);
+      int numLEDtoLight = map(engineRPM,0,675,0,18);
+      //Serial.println(engineRPM);
+      //Serial.println(numLEDtoLight);
       //Update the leds and set the max led to a new value
-      engLEDMax += updateLED(numLEDtoLight,engLEDMax);
+      engLEDMax += updateRPMLED(6,numLEDtoLight,engLEDMax,1);
 
-      numLEDtoLight = map8(mph, 0, 18);
+      numLEDtoLight = map(secondRPM,0,675,0,18);
+      //Serial.println(numLEDtoLight);
       //Update the leds and set the max led to a new value
-      mphLEDMax += updateLED(numLEDtoLight,mphLEDMax);
+      mphLEDMax += updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
       //Display the leds
-      FastLED.show();
+
 
       //Update seven segment Display
-      sevSeg.print(1000, DEC);
+      sevSeg.print(currentTime/1000);
+      sevSeg.drawColon(true);
       sevSeg.writeDisplay();
-
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
@@ -156,8 +185,10 @@ int getRPM(int pin, int samples)
 {
   int avgRPM = 0;
   for(int i = 0; i < samples; i++)
+  {
     delayMicroseconds(50);
     avgRPM += analogRead(pin);
+  }
   return avgRPM/samples;
 }
 
@@ -205,24 +236,124 @@ String generateFileName(String fh,int cs, bool skipSDInit)
   return fn;
 }
 
-int updateLED(int numLED, int maxLEDNum)
+int updateMPHLED(int start, int numLED, int maxLED, int color)
 {
-  int diff = maxLEDNum - numLED;
-  if(diff > 0)
+  for(int i = start; i < 24; i++)
   {
-    //Need to turn off leds
-    for(int i = numLED; i < maxLEDNum; i++)
-    {
-      leds[i] = 0;
-    }
+    leds[i] = CRGB::Black;
   }
-  else
+
+  if(color == 1)
   {
-    //Need to add more on leds
-    for(int i = maxLEDNum; i < numLED; i++)
+    for(int i = 12; i < numLED+12;i++)
     {
-      leds[i] = 0xFF44DD;
+      if(i >= 12 && i < 15)
+      {
+        leds[i].r=225;
+      }
+      else if(i > 14 && i < 20)
+      {
+        leds[i].g=255;
+        leds[i].r=255;
+      }
+      else if(i > 19 && i < 24)
+      {
+        leds[i].g = 255;
+      }
+      else if(i > 23)
+      {
+        leds[(24-i)*-1].g = 255;
+      }
     }
+    /**
+    for(int i = 0;i < numLED;i++)
+    {
+      if(i < 6)
+      {
+        leds[5-i].g = 255;
+      }
+      else if(i > 6 && i < 11)
+      {
+        leds[30-i].g=255;
+      }
+      else if(i > 10 && i < 16)
+      {
+        leds[30-i].g=255;
+        leds[30-i].r=255;
+      }
+      //else if(i > 15 && i < 19)
+      //{
+      //  leds[30-i].r = 255;
+      //}
+      else
+      {
+        leds[30-i].r=255;
+      }**/
+    //}
   }
-  return diff;
+  FastLED.show();
+  return 0;
+}
+
+  int updateRPMLED(int start, int numLED, int maxLED, int color)
+  {
+    start += 24;
+    for(int i = start; i < start+24; i++)
+    {
+      leds[i] = CRGB::Black;
+    }
+
+    if(color == 1)
+    {
+      for(int i = start; i < start + numLED; i++)
+      {
+        if(i >= start+15)
+        {
+          leds[i].r = 255;
+        }
+        else if(i > start+9 && i < start+15)
+        {
+          leds[i].g = 255;
+          leds[i].r = 255;
+        }
+        else
+        {
+          leds[i].g = 255;
+        }
+      }
+    }
+    FastLED.show();
+    return 0;
+  }
+
+  // int diff = maxLEDNum - numLED;
+  // if(diff == 0)
+  // {
+  //   return 0;
+  // }
+  // if(diff > 0)
+  // {
+  //   //Need to turn off leds
+  //   for(int i = startingLED + numLED; i > startingLED + maxLEDNum; i--)
+  //   {
+  //     leds[i] = 0;
+  //   }
+  //   FastLED.show();
+  //   Serial.println(diff);
+  //   return diff ;
+  // }
+  // else
+  // {
+  //   //Need to add more on leds
+  //   for(int i = startingLED + maxLEDNum; i < startingLED + numLED; i++)
+  //   {
+  //     leds[i] = 0xFF44DD;
+  //   }
+  //
+  //   FastLED.show();
+  //   Serial.println(diff);
+  //   return diff * -1;
+  // }
+int map(int x, int in_min, int in_max, int out_min, int out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
