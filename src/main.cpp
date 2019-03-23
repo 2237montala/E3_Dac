@@ -9,11 +9,9 @@ int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
-//Actual value is 9.48 but decimals are slow in math
-const int reduction = 9.48 * 100; //Gear box rpm reduction
+const int reduction = 9.48; //Gear box rpm reduction
 
-//Actual value is 4.712 but decimals are slow in math
-const int wheelCircum = 4.712 * 1000; //in feet
+const int wheelCircum = 4.712; //in feet
 
 #define rpmArrayLen 100
 int rpmArray[rpmArrayLen]; //Array of rpms to be saved
@@ -147,7 +145,7 @@ void loop() {
 
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
-      //int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
+      //int mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
       //Serial.println(mph);
 
       //Update the led rings
