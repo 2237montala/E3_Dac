@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include <SD.h>
+#include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
 
 int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
@@ -23,6 +26,9 @@ CRGB leds[NUM_LEDS];
 int engLEDMax = 0;
 int mphLEDMax = 0;
 
+//4 Digit 7 Segment Display
+Adafruit_7segment sevSeg;
+
 
 //SD Card
 File dataFile;
@@ -39,6 +45,8 @@ const int ledInerval = 30; //in millis
 const byte recordSwitch = 3;
 bool stop = 0;
 bool startUp = 1;
+const byte leftBut = 8;
+const byte rightBut = 7;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
@@ -75,6 +83,8 @@ void setup() {
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
   FastLED.setBrightness(225* 0.4);
 
+  sevSeg = Adafruit_7segment();
+
 }
 
 void loop() {
@@ -87,7 +97,6 @@ void loop() {
         stop = 0;
         Serial.println(stop);
       }
-
     if(currentTime - previousMillis >= recordInerval)
     {
       //Collect data
@@ -109,26 +118,28 @@ void loop() {
         collectionCounter = 0;
         Serial.println("Data Saved");
       }
+    }
+    else if(currentTime - previousMillis >= ledInerval)
+    {
+      //Calculate Values extra 1000 is for wheelCircum
+      int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
 
-      //Calculate Values
-      //float mph = (wheelCircum * halfShaftRPM)/88; //Unrounded mph
-      //mph = float(long(mph*100)/100); //Rounded to 2 decimal places
+      //Update the led rings
+      int numLEDtoLight = map8(engineRPM, 0, 18);
+      //Update the leds and set the max led to a new value
+      engLEDMax += updateLED(numLEDtoLight,engLEDMax);
 
-      if(currentTime - previousMillis >= ledInerval)
-      {
-        //Calculate Values extra 1000 is for wheelCircum
-        int mph = (wheelCircum * (secondRPM/reduction/100))/88*1000; //Unrounded mph
-        //mph = float(long(mph*100)/100); //Rounded to 2 decimal places
+      numLEDtoLight = map8(mph, 0, 18);
+      //Update the leds and set the max led to a new value
+      mphLEDMax += updateLED(numLEDtoLight,mphLEDMax);
 
-          //Update the led rings
-          int numLEDtoLight = map8(engineRPM, 0, 18);
-          //Update the leds and set the max led to a new value
-          engLEDMax += updateLED(numLEDtoLight,engLEDMax);
+      //Display the leds
+      FastLED.show();
 
-          numLEDtoLight = map8(mph, 0, 18);
-          //Update the leds and set the max led to a new value
-          mphLEDMax += updateLED(numLEDtoLight,mphLEDMax);
-      }
+      //Update seven segment Display
+      sevSeg.print(1000, DEC);
+      sevSeg.writeDisplay();
+
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
