@@ -1,21 +1,24 @@
 #include <Arduino.h>
+#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
 #include <SD.h>
 #include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
 
+
 int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
-const int reduction = 9.48; //Gear box rpm reduction
+const float reduction = 9.48; //Gear box rpm reduction
 
-const int wheelCircum = 4.712; //in feet
+const float wheelCircum = 4.712; //in feet
 
 #define rpmArrayLen 100
 int rpmArray[rpmArrayLen]; //Array of rpms to be saved
 byte collectionCounter = 0;
+bool writingData = false;
 
 //Each dial has 24 leds but to make it look like a dial we only use 18
 #define NUM_LEDS 48
@@ -27,7 +30,6 @@ int mphLEDMax = 0;
 //4 Digit 7 Segment Display
 Adafruit_7segment sevSeg;
 
-
 //SD Card
 File dataFile;
 String fileName;
@@ -38,7 +40,7 @@ const byte chipSelect = 53;
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
-const int ledInerval = 30; //in millis
+const int ledInerval = 60; //in millis
 unsigned long startTime = 0;
 
 //Other Settings
@@ -58,8 +60,6 @@ int milliToMinSec(long milli);
 
 void setup() {
   //analogReference(EXTERNAL);
-
-
   //Initialize values in array to -1
   for(int i = 0; i < rpmArrayLen; i++)
   {
@@ -87,8 +87,9 @@ void setup() {
   }
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* 0.1);
+  FastLED.setBrightness(225* .1);
   leds[1].red = 255;
+  leds[25].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
@@ -96,7 +97,6 @@ void setup() {
   sevSeg.setBrightness(16*.5);
   sevSeg.print(0000, DEC);
   sevSeg.writeDisplay();
-
 }
 
 void loop() {
@@ -123,11 +123,8 @@ void loop() {
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
       collectionCounter++;
 
-
-
       if(collectionCounter > rpmArrayLen/2)
       {
-
         //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
         //writeData(rpmArrayLen/2,fileName);
@@ -135,13 +132,17 @@ void loop() {
         Serial.println("Data Saved");
         Serial.println(rpmArray[1]);
         Serial.println(rpmArray[51]);
+        writingData = true;
         //Serial.println(currentTime);
       }
+      else if(writingData)
+      {
+        writingData = false;
+      }
     }
-    if(currentTime - prevMillisLED >= ledInerval)
+    if(writingData && currentTime - prevMillisLED >= ledInerval)
     {
       prevMillisLED = currentTime;
-
 
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
@@ -202,12 +203,12 @@ int getRPM(int pin, int samples)
 
 void writeData(int arrayLength, String fileName)
 {
+  dataFile = SD.open(fileName, FILE_WRITE);
   for(int i = 0; i < arrayLength/2; i++)
   {
-    dataFile = SD.open(fileName, FILE_WRITE);
-    dataFile.println(String(rpmArray[i]) + " " + String(rpmArray[(i) + rpmArrayLen/2]));
-    dataFile.close();
+    dataFile.println(String(rpmArray[i]) + "," + String(rpmArray[(i) + rpmArrayLen/2]));
   }
+  dataFile.close();
 }
 
 String generateFileName(String fh,int cs, bool skipSDInit)
@@ -273,27 +274,6 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
         leds[24+5-i].r = 255;
       }
     }
-
-    // for(int i = 12; i < numLED+12;i++)
-    // {
-    //   if(i >= 12 && i < 15)
-    //   {
-    //     leds[i].r=225;
-    //   }
-    //   else if(i > 14 && i < 20)
-    //   {
-    //     leds[i].g=255;
-    //     leds[i].r=255;
-    //   }
-    //   else if(i > 19 && i < 24)
-    //   {
-    //     leds[i].g = 255;
-    //   }
-    //   else if(i > 23)
-    //   {
-    //     leds[(24-i)*-1].g = 255;
-    //   }
-    // }
   }
   FastLED.show();
   return 0;
@@ -330,7 +310,8 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
     return 0;
   }
 
-int map(int x, int in_min, int in_max, int out_min, int out_max) {
+int map(int x, int in_min, int in_max, int out_min, int out_max)
+{
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
