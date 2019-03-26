@@ -1,11 +1,10 @@
 #include <Arduino.h>
-#define FASTLED_ALLOW_INTERRUPTS 0
+//#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
 #include <SD.h>
 #include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
-
 
 int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
@@ -57,6 +56,7 @@ int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
 int milliToMinSec(long milli);
+void displayTime(long currTime);
 
 void setup() {
   //analogReference(EXTERNAL);
@@ -152,30 +152,14 @@ void loop() {
       //Update the led rings
       int numLEDtoLight = map(engineRPM,0,675,0,18);
       //Update the leds and set the max led to a new value
-      engLEDMax += updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+      engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
 
       numLEDtoLight = map(secondRPM,0,675,0,18);
       //Update the leds and set the max led to a new value
-      mphLEDMax += updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+      mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
       //Update seven segment Display
-      int currTime = milliToMinSec(currentTime-startTime);
-
-      for(int i = 0;i < 5; i++)
-      {
-        if(i < 2)
-        {
-          sevSeg.writeDigitNum(4-i,currTime % 10);
-          currTime = currTime / 10;
-        }
-
-        if(i >= 3)
-        {
-          sevSeg.writeDigitNum(4-i,currTime % 10);
-          currTime = currTime / 10;
-        }
-      }
-
+      displayTime(milliToMinSec(currentTime-startTime));
       sevSeg.drawColon(true);
       sevSeg.writeDisplay();
     }
@@ -281,33 +265,43 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
 
 int updateRPMLED(int start, int numLED, int maxLED, int color)
 {
+    int diff = maxLED - numLED;
     start += 24;
-    for(int i = start; i < start+24; i++)
+    if(diff > 0)
     {
-      leds[i] = CRGB::Black;
-    }
-
-    if(color == 1)
-    {
-      for(int i = start; i < start + numLED; i++)
+      //Turn off leds
+      for(int i = maxLED+24; i > numLED+24; i--)
       {
-        if(i >= start+15)
+        leds[i] = CRGB::Black;
+      }
+
+    }
+    else
+    {
+      //Turn on leds
+      if(color == 1)
+      {
+        for(int i = start; i < start + numLED; i++)
         {
-          leds[i].r = 255;
-        }
-        else if(i > start+9 && i < start+15)
-        {
-          leds[i].g = 255;
-          leds[i].r = 255;
-        }
-        else
-        {
-          leds[i].g = 255;
+          if(i >= start+15)
+          {
+            leds[i].r = 255;
+          }
+          else if(i > start+9 && i < start+15)
+          {
+            leds[i].g = 255;
+            leds[i].r = 255;
+          }
+          else
+          {
+            leds[i].g = 255;
+          }
         }
       }
     }
+
     FastLED.show();
-    return 0;
+    return diff;
   }
 
 int map(int x, int in_min, int in_max, int out_min, int out_max)
@@ -321,4 +315,38 @@ int  milliToMinSec(long milli)
   int min = (milli/60000) * 100;
   //Serial.println(min + sec);
   return min + sec;
+}
+
+void displayTime(long currTime)
+{
+  for(int i = 0;i < 5; i++)
+  {
+    if(i < 2)
+    {
+      sevSeg.writeDigitNum(4-i,currTime % 10);
+      currTime = currTime / 10;
+    }
+
+    if(i >= 3)
+    {
+      sevSeg.writeDigitNum(4-i,currTime % 10);
+      currTime = currTime / 10;
+    }
+  }
+}
+
+void checkButtons(int buttonOne, int buttonTwo)
+{
+  if(digitalRead(buttonOne) && digitalRead(buttonTwo))
+  {
+    //Add lap and reset sev seg timer
+  }
+  else if(digitalRead(buttonOne))
+  {
+    //Move display left
+  }
+  else if(digitalRead(buttonTwo))
+  {
+    //Move display right
+  }
 }
