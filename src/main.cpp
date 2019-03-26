@@ -41,7 +41,6 @@ unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
 const int ledInerval = 60; //in millis
 unsigned long startTime = 0;
-unsigned long oldLapTime = 0;
 
 //Other Settings
 const byte recordSwitch = 3;
@@ -169,10 +168,6 @@ void loop() {
           sevSeg.drawColon(true);
           break;
         case 1:
-          displayTime(milliToMinSec(currentTime-startTime-oldLapTime));
-          sevSeg.drawColon(true);
-          break;
-        case 2:
           sevSeg.drawColon(false);
           sevSeg.print(laps,DEC);
           break;
@@ -372,7 +367,7 @@ void checkButtons(int buttonOne, int buttonTwo)
   {
     //Add lap and reset sev seg timer
     laps++;
-    oldLapTime = millis();
+    startTime = millis();
   }
   else if(digitalRead(buttonOne))
   {
