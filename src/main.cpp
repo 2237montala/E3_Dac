@@ -48,6 +48,8 @@ bool stop = 0;
 bool startUp = 1;
 const byte leftBut = 8;
 const byte rightBut = 7;
+int laps = 0;
+byte displayMode = 0;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
@@ -159,8 +161,17 @@ void loop() {
       mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
       //Update seven segment Display
-      displayTime(milliToMinSec(currentTime-startTime));
-      sevSeg.drawColon(true);
+      switch(displayMode)
+      {
+        case 0:
+          displayTime(milliToMinSec(currentTime-startTime));
+          sevSeg.drawColon(true);
+          break;
+        case 1:
+          sevSeg.drawColon(false);
+          sevSeg.print(laps,DEC);
+          break;
+      }
       sevSeg.writeDisplay();
     }
   }
@@ -231,36 +242,51 @@ String generateFileName(String fh,int cs, bool skipSDInit)
 
 int updateMPHLED(int start, int numLED, int maxLED, int color)
 {
-  for(int i = start; i < 24; i++)
-  {
-    leds[i] = CRGB::Black;
-  }
+  int diff = maxLED - numLED;
 
-  if(color == 1)
+  if(diff > 0)
   {
-    for(int i = 0;i< numLED;i++)
+    for(int i = maxLED; i > numLED; i--)
     {
-      if(i < 6)
+      if(i > 12)
       {
-        leds[5-i].g = 255;
+        leds[12+i] = CRGB::Blue;
       }
-      else if(i > 5 && i < 10)
+      else
       {
-        leds[24+5-i].g = 255;
+        //13 and above
+        leds[i - 13] = CRGB::Blue;
       }
-      else if(i > 9 && i < 15)
+    }
+  }
+  else
+  {
+    if(color == 1)
+    {
+      for(int i = 0;i< numLED;i++)
       {
-        leds[24+5-i].g = 255;
-        leds[24+5-i].r = 255;
-      }
-      else if(i > 14 && i < 18)
-      {
-        leds[24+5-i].r = 255;
+        if(i < 6)
+        {
+          leds[5-i].g = 255;
+        }
+        else if(i > 5 && i < 10)
+        {
+          leds[24+5-i].g = 255;
+        }
+        else if(i > 9 && i < 15)
+        {
+          leds[24+5-i].g = 255;
+          leds[24+5-i].r = 255;
+        }
+        else if(i > 14 && i < 18)
+        {
+          leds[24+5-i].r = 255;
+        }
       }
     }
   }
   FastLED.show();
-  return 0;
+  return diff;
 }
 
 int updateRPMLED(int start, int numLED, int maxLED, int color)
@@ -272,9 +298,8 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
       //Turn off leds
       for(int i = maxLED+24; i > numLED+24; i--)
       {
-        leds[i] = CRGB::Black;
+        leds[i] = CRGB::Blue;
       }
-
     }
     else
     {
@@ -340,13 +365,17 @@ void checkButtons(int buttonOne, int buttonTwo)
   if(digitalRead(buttonOne) && digitalRead(buttonTwo))
   {
     //Add lap and reset sev seg timer
+    laps++;
+    startTime = millis();
   }
   else if(digitalRead(buttonOne))
   {
     //Move display left
+    displayMode - 1;
   }
   else if(digitalRead(buttonTwo))
   {
     //Move display right
+    displayMode + 1;
   }
 }
