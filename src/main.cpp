@@ -6,10 +6,13 @@
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
 
+#define DEBUG 1
+
 int engineRPMPin = A0; //Engine rpm pin from lm2907
 int secondRPMPin = A1; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
+int mph = 18;
 const float reduction = 9.48; //Gear box rpm reduction
 
 const float wheelCircum = 4.712; //in feet
@@ -33,7 +36,7 @@ Adafruit_7segment sevSeg;
 //SD Card
 File dataFile;
 String fileName;
-String fileHeader = "Sample_";
+const String fileHeader = "Sample_";
 const byte chipSelect = 53;
 
 //Loop settings
@@ -44,13 +47,16 @@ const int ledInerval = 30; //in millis
 unsigned long startTime = 0;
 
 //Other Settings
-const byte recordSwitch = 3;
+const byte recordSwitch = 2;
 bool stop = 0;
 bool startUp = 1;
-const byte leftBut = 8;
-const byte rightBut = 7;
-int laps = 0;
+const byte leftBut = 3;
+const byte rightBut = 4;
+byte laps = 0;
 byte displayMode = 0;
+bool resetLap = false;
+bool buttonLeftPressed = false;
+bool buttonRightPressed = false;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength, String fileName);
@@ -60,6 +66,9 @@ int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
 int milliToMinSec(long milli);
 void displayTime(long currTime);
+int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo);
+int calculateTrueEngineRPM(int analogPinValue);
+int calculateTrueSeconardRPM(int analogPinValue);
 
 void setup() {
   //analogReference(EXTERNAL);
@@ -68,11 +77,15 @@ void setup() {
   {
     rpmArray[i] = -1;
   }
-  //Serial.begin(9600);
-  pinMode(recordSwitch, INPUT_PULLUP);
+  #ifdef DEBUG
+    Serial.begin(9600);
+  #endif
+
+  pinMode(recordSwitch, INPUT);
   pinMode(LED_BUILTIN,OUTPUT);
-  pinMode(4,OUTPUT);
-  pinMode(5,OUTPUT);
+  pinMode(leftBut,INPUT);
+  pinMode(rightBut,INPUT);
+  pinMode(12,OUTPUT);
 
   digitalWrite(LED_BUILTIN, LOW);
 
@@ -93,8 +106,8 @@ void setup() {
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
   FastLED.setBrightness(225* .05);
-  leds[0].red = 255;
-  leds[24].red = 255;
+  leds[23].red = 255;
+  leds[47].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
@@ -119,14 +132,14 @@ void loop() {
     {
       //Collect data
       prevMillisRec = currentTime;
-      //In theory both rpm collections should be 3 ms @ 10 samples each
-      //with 50 microsecond delay between samples
-      //Turn on pin 4
-      digitalWrite(4,HIGH);
+      //Takes 2.2ms to record 20 samples
       engineRPM = getRPM(engineRPMPin,10);
       secondRPM = getRPM(secondRPMPin,10);
-      //Turn off pin
-      digitalWrite(4,LOW);
+
+      #ifdef DEBUG
+        //Serial.println(engineRPM);
+        //Serial.println(secondRPM);
+      #endif
 
       rpmArray[collectionCounter] = engineRPM;
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
@@ -136,13 +149,9 @@ void loop() {
       {
         //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
-        writeData(rpmArrayLen/2,fileName);
+        //writeData(rpmArrayLen/2,fileName);
         collectionCounter = 0;
-        //Serial.println("Data Saved");
-        //Serial.println(rpmArray[1]);
-        //Serial.println(rpmArray[51]);
         writingData = true;
-        //Serial.println(currentTime);
       }
       else if(writingData)
       {
@@ -151,25 +160,24 @@ void loop() {
     }
     if(!writingData && currentTime - prevMillisLED >= ledInerval)
     {
+      digitalWrite(12,HIGH);
       prevMillisLED = currentTime;
-      digitalWrite(5,HIGH);
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
-      //int mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
+      //mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
       //Serial.println(mph);
 
       //Update the led rings
       int numLEDtoLight = map(engineRPM,0,655,0,18);
       //Update the leds and set the max led to a new value
       engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
-      //Serial.println(engLEDMax);
 
       numLEDtoLight = map(secondRPM,0,655,0,18);
       //Update the leds and set the max led to a new value
       mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
-      //Serial.println(mphLEDMax);
 
       //Update seven segment Display
+      displayMode = checkButtons(displayMode,leftBut,rightBut);
       switch(displayMode)
       {
         case 0:
@@ -180,10 +188,25 @@ void loop() {
           sevSeg.drawColon(false);
           sevSeg.print(laps,DEC);
           break;
-
+        case 2:
+          //driver time
+          sevSeg.print(0000,DEC);
+          break;
+        case 3:
+          //engineRPM
+          sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
+          break;
+        case 4:
+          //secondary rpm
+          sevSeg.print(calculateTrueSeconardRPM(secondRPM),DEC);
+          break;
+        case 5:
+          //mph
+          sevSeg.print(mph,DEC);
+          break;
       }
       sevSeg.writeDisplay();
-      digitalWrite(5,LOW);
+      digitalWrite(12,LOW);
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
@@ -193,6 +216,8 @@ void loop() {
     //Serial.println(stop);
     digitalWrite(LED_BUILTIN,LOW);
     fileName = generateFileName(fileHeader,chipSelect,true);
+    updateMPHLED(0, 0, mphLEDMax, 1);
+    updateRPMLED(6, 0, engLEDMax, 1);
   }
 }
 
@@ -278,12 +303,12 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
           //leds[5-i].g = 255;
           leds[5-i] = CRGB::Green;
         }
-        else if(i > 5 && i < 10)
+        else if(i > 5 && i < 11)
         {
           //leds[24+5-i].g = 255;
           leds[24+5-i] = CRGB::Green;
         }
-        else if(i > 9 && i < 15)
+        else if(i > 10 && i < 15)
         {
           //leds[24+5-i].g = 255;
           //leds[24+5-i].r = 255;
@@ -324,7 +349,7 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
           {
             leds[i] = CRGB::Red;
           }
-          else if(i > start+9 && i < start+15)
+          else if(i > start+10 && i < start+15)
           {
             //leds[i].g = 255;
             //leds[i].r = 255;
@@ -373,22 +398,80 @@ void displayTime(long currTime)
   }
 }
 
-void checkButtons(int buttonOne, int buttonTwo)
+int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
 {
-  if(digitalRead(buttonOne) && digitalRead(buttonTwo))
+  bool buttonOneState = digitalRead(buttonOne);
+  bool buttonTwoState = digitalRead(buttonTwo);
+  if(!resetLap && buttonOneState && buttonTwoState)
   {
     //Add lap and reset sev seg timer
     laps++;
     startTime = millis();
+    resetLap = true;
+    #ifdef DEBUG
+      Serial.println("lap reset");
+    #endif
   }
-  else if(digitalRead(buttonOne))
+  else if(resetLap && !buttonOneState && !buttonTwoState)
+  {
+    resetLap = false;
+  }
+  else if(!buttonLeftPressed && buttonOneState)
   {
     //Move display left
-    displayMode - 1;
+    buttonLeftPressed = true;
+    if(currDisplayMode != 0)
+      currDisplayMode -= 1;
+
+    #ifdef DEBUG
+      Serial.println(currDisplayMode);
+    #endif
   }
-  else if(digitalRead(buttonTwo))
+  else if(!buttonRightPressed && buttonTwoState)
   {
     //Move display right
-    displayMode + 1;
+    buttonRightPressed = true;
+    if(currDisplayMode != 5)
+      currDisplayMode += 1;
+
+    #ifdef DEBUG
+      Serial.println(currDisplayMode);
+    #endif
   }
+  else
+  {
+    if(!buttonTwoState)
+    {
+      buttonRightPressed = false;
+    }
+    if(!buttonOneState)
+    {
+      buttonLeftPressed = false;
+    }
+  }
+
+
+  return currDisplayMode;
+}
+
+int calculateTrueEngineRPM(int analogPinValue)
+{
+  //The conversion factor is 6.218
+  //long rpm = (analogPinValue * 6218) / 1000;
+  int rpm = (analogPinValue)* 6.218;
+  #ifdef DEBUG
+    //Serial.println(rpm);
+  #endif
+  return rpm;
+}
+
+int calculateTrueSeconardRPM(int analogPinValue)
+{
+  //The conversion factor is 14.49
+  //long rpm = (analogPinValue * 6218) / 1000;
+  int rpm = (analogPinValue)* 14.49;
+  #ifdef DEBUG
+    //Serial.println(rpm);
+  #endif
+  return rpm;
 }
