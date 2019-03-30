@@ -40,7 +40,7 @@ const byte chipSelect = 53;
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
-const int ledInerval = 40; //in millis
+const int ledInerval = 30; //in millis
 unsigned long startTime = 0;
 
 //Other Settings
@@ -68,9 +68,11 @@ void setup() {
   {
     rpmArray[i] = -1;
   }
-  Serial.begin(9600);
+  //Serial.begin(9600);
   pinMode(recordSwitch, INPUT_PULLUP);
   pinMode(LED_BUILTIN,OUTPUT);
+  pinMode(4,OUTPUT);
+  pinMode(5,OUTPUT);
 
   digitalWrite(LED_BUILTIN, LOW);
 
@@ -110,7 +112,7 @@ void loop() {
       {
         digitalWrite(LED_BUILTIN,HIGH);
         stop = 0;
-        Serial.println(stop);
+        //Serial.println(stop);
         startTime = currentTime;
       }
     if(currentTime - prevMillisRec >= recordInerval)
@@ -119,8 +121,12 @@ void loop() {
       prevMillisRec = currentTime;
       //In theory both rpm collections should be 3 ms @ 10 samples each
       //with 50 microsecond delay between samples
+      //Turn on pin 4
+      digitalWrite(4,HIGH);
       engineRPM = getRPM(engineRPMPin,10);
       secondRPM = getRPM(secondRPMPin,10);
+      //Turn off pin
+      digitalWrite(4,LOW);
 
       rpmArray[collectionCounter] = engineRPM;
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
@@ -130,9 +136,9 @@ void loop() {
       {
         //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
-        //writeData(rpmArrayLen/2,fileName);
+        writeData(rpmArrayLen/2,fileName);
         collectionCounter = 0;
-        Serial.println("Data Saved");
+        //Serial.println("Data Saved");
         //Serial.println(rpmArray[1]);
         //Serial.println(rpmArray[51]);
         writingData = true;
@@ -146,6 +152,7 @@ void loop() {
     if(!writingData && currentTime - prevMillisLED >= ledInerval)
     {
       prevMillisLED = currentTime;
+      digitalWrite(5,HIGH);
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
       //int mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
@@ -176,13 +183,14 @@ void loop() {
 
       }
       sevSeg.writeDisplay();
+      digitalWrite(5,LOW);
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
   {
-    Serial.println("Not recording");
+    //Serial.println("Not recording");
     stop = 1;
-    Serial.println(stop);
+    //Serial.println(stop);
     digitalWrite(LED_BUILTIN,LOW);
     fileName = generateFileName(fileHeader,chipSelect,true);
   }
@@ -193,7 +201,7 @@ int getRPM(int pin, int samples)
   int avgRPM = 0;
   for(int i = 0; i < samples; i++)
   {
-    delayMicroseconds(50);
+    //delayMicroseconds(50);
     avgRPM += analogRead(pin);
   }
   return avgRPM/samples;
