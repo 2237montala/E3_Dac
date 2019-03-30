@@ -14,6 +14,7 @@ const float reduction = 9.48; //Gear box rpm reduction
 
 const float wheelCircum = 4.712; //in feet
 
+
 #define rpmArrayLen 100
 int rpmArray[rpmArrayLen]; //Array of rpms to be saved
 byte collectionCounter = 0;
@@ -39,7 +40,7 @@ const byte chipSelect = 53;
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
-const int ledInerval = 60; //in millis
+const int ledInerval = 40; //in millis
 unsigned long startTime = 0;
 
 //Other Settings
@@ -89,9 +90,9 @@ void setup() {
   }
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* .1);
-  leds[1].red = 255;
-  leds[25].red = 255;
+  FastLED.setBrightness(225* .05);
+  leds[0].red = 255;
+  leds[24].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
@@ -132,8 +133,8 @@ void loop() {
         //writeData(rpmArrayLen/2,fileName);
         collectionCounter = 0;
         Serial.println("Data Saved");
-        Serial.println(rpmArray[1]);
-        Serial.println(rpmArray[51]);
+        //Serial.println(rpmArray[1]);
+        //Serial.println(rpmArray[51]);
         writingData = true;
         //Serial.println(currentTime);
       }
@@ -142,23 +143,24 @@ void loop() {
         writingData = false;
       }
     }
-    if(writingData && currentTime - prevMillisLED >= ledInerval)
+    if(!writingData && currentTime - prevMillisLED >= ledInerval)
     {
       prevMillisLED = currentTime;
-
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
       //int mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
       //Serial.println(mph);
 
       //Update the led rings
-      int numLEDtoLight = map(engineRPM,0,675,0,18);
+      int numLEDtoLight = map(engineRPM,0,655,0,18);
       //Update the leds and set the max led to a new value
       engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+      //Serial.println(engLEDMax);
 
-      numLEDtoLight = map(secondRPM,0,675,0,18);
+      numLEDtoLight = map(secondRPM,0,655,0,18);
       //Update the leds and set the max led to a new value
       mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+      //Serial.println(mphLEDMax);
 
       //Update seven segment Display
       switch(displayMode)
@@ -247,17 +249,14 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
 
   if(diff > 0)
   {
-    for(int i = maxLED; i > numLED; i--)
+    for(int i = numLED; i < maxLED; i++)
     {
-      if(i > 12)
+      if(i < 6)
       {
-        leds[12+i] = CRGB::Blue;
+        leds[5-i] = CRGB::Black;
       }
-      else
-      {
-        //13 and above
-        leds[i - 13] = CRGB::Blue;
-      }
+      else if(i > 5)
+        leds[24+5-i] = CRGB::Black;
     }
   }
   else
@@ -268,20 +267,24 @@ int updateMPHLED(int start, int numLED, int maxLED, int color)
       {
         if(i < 6)
         {
-          leds[5-i].g = 255;
+          //leds[5-i].g = 255;
+          leds[5-i] = CRGB::Green;
         }
         else if(i > 5 && i < 10)
         {
-          leds[24+5-i].g = 255;
+          //leds[24+5-i].g = 255;
+          leds[24+5-i] = CRGB::Green;
         }
         else if(i > 9 && i < 15)
         {
-          leds[24+5-i].g = 255;
-          leds[24+5-i].r = 255;
+          //leds[24+5-i].g = 255;
+          //leds[24+5-i].r = 255;
+          leds[24+5-i] = CRGB::Yellow;
         }
         else if(i > 14 && i < 18)
         {
-          leds[24+5-i].r = 255;
+          //leds[24+5-i].r = 255;
+          leds[24+5-i] = CRGB::Red;
         }
       }
     }
@@ -297,9 +300,9 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
     if(diff > 0)
     {
       //Turn off leds
-      for(int i = maxLED+24; i > numLED+24; i--)
+      for(int i = maxLED; i > numLED; i--)
       {
-        leds[i] = CRGB::Blue;
+        leds[i+start-1] = CRGB::Black;
       }
     }
     else
@@ -311,21 +314,22 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
         {
           if(i >= start+15)
           {
-            leds[i].r = 255;
+            leds[i] = CRGB::Red;
           }
           else if(i > start+9 && i < start+15)
           {
-            leds[i].g = 255;
-            leds[i].r = 255;
+            //leds[i].g = 255;
+            //leds[i].r = 255;
+            leds[i] = CRGB::Yellow;
           }
           else
           {
-            leds[i].g = 255;
+            //leds[i].g = 255;
+            leds[i] = CRGB::Green;
           }
         }
       }
     }
-
     FastLED.show();
     return diff;
   }
