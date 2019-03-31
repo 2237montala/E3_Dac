@@ -14,8 +14,7 @@ int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
 int mph = 18;
 const float reduction = 9.48; //Gear box rpm reduction
-
-const float wheelCircum = 4.712; //in feet
+const float wheelCircum = 23; //in inches
 
 
 #define rpmArrayLen 100
