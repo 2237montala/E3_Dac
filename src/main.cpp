@@ -58,8 +58,10 @@ const byte rightBut = 4;
 byte laps = 0;
 byte displayMode = 0;
 bool resetLap = false;
-bool buttonLeftPressed = false;
-bool buttonRightPressed = false;
+bool butLeftPressed = false;
+bool butRightPressed = false;
+unsigned int butLeftHoldLen = 0;
+unsigned int butRightHoldLen = 0;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength);
@@ -68,8 +70,10 @@ int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
 int milliToMinSec(long milli);
+int milliToHourMin(long milli);
 void displayTime(long currTime);
-int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo);
+int checkButtons(int currDisplayMode,int butLeft, int butRight);
+bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger);
 int calculateTrueEngineRPM(int analogPinValue);
 int calculateTrueSeconardRPM(int analogPinValue);
 
@@ -194,7 +198,8 @@ void loop() {
           break;
         case 2:
           //driver time
-          sevSeg.print(0000,DEC);
+          displayTime(milliToHourMin(currentTime-driverTime));
+          sevSeg.drawColon(true);
           break;
         case 3:
           //engineRPM
@@ -392,6 +397,13 @@ int  milliToMinSec(long milli)
   return min + sec;
 }
 
+int milliToHourMin(long milli)
+{
+  int min = (milli/60000) * 100;
+  int hr  = (min/60);
+  return hr+min;
+}
+
 void displayTime(long currTime)
 {
   for(int i = 0;i < 5; i++)
@@ -410,11 +422,22 @@ void displayTime(long currTime)
   }
 }
 
-int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
+int checkButtons(int currDisplayMode,int butLeft, int butRight)
 {
-  bool buttonOneState = digitalRead(buttonOne);
-  bool buttonTwoState = digitalRead(buttonTwo);
-  if(!resetLap && buttonOneState && buttonTwoState)
+  bool butLeftState = digitalRead(butLeft);
+  bool butRightState = digitalRead(butRight);
+  //If the buttons are being held then increment the time they have been
+  if(butLeftState)
+    butLeftHoldLen += ledInerval;
+  else
+    butLeftHoldLen = 0;
+
+  if(butRightState)
+    butRightHoldLen += ledInerval;
+  else
+    butRightHoldLen=0;
+
+  if(!resetLap && butLeftState && butRightState)
   {
     //Add lap and reset sev seg timer
     laps++;
@@ -423,15 +446,21 @@ int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
     #ifdef DEBUG
       Serial.println("lap reset");
     #endif
+
+    if(currDisplayMode == 2)
+    {
+      //In driver time
+      driverTime = lapTime;
+    }
   }
-  else if(resetLap && !buttonOneState && !buttonTwoState)
+  else if(resetLap && !butLeftState && !butRightState)
   {
     resetLap = false;
   }
-  else if(!buttonLeftPressed && buttonOneState)
+  else if(!butLeftPressed && butLeftState)
   {
     //Move display left
-    buttonLeftPressed = true;
+    butLeftPressed = true;
     if(currDisplayMode != 0)
       currDisplayMode -= 1;
 
@@ -439,10 +468,10 @@ int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
       Serial.println(currDisplayMode);
     #endif
   }
-  else if(!buttonRightPressed && buttonTwoState)
+  else if(!butRightPressed && butRightState)
   {
     //Move display right
-    buttonRightPressed = true;
+    butRightPressed = true;
     if(currDisplayMode != 5)
       currDisplayMode += 1;
 
@@ -452,16 +481,21 @@ int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
   }
   else
   {
-    if(!buttonTwoState)
+    if(!butRightState)
     {
-      buttonRightPressed = false;
+      butRightPressed = false;
     }
-    if(!buttonOneState)
+    if(!butLeftState)
     {
-      buttonLeftPressed = false;
+      butLeftPressed = false;
     }
   }
   return currDisplayMode;
+}
+
+bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger)
+{
+  return buttonHeldLength >= buttonHeldLengthTrigger;
 }
 
 int calculateTrueEngineRPM(int analogPinValue)
