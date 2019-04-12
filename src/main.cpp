@@ -1,7 +1,8 @@
 #include <Arduino.h>
 //#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
-#include <SD.h>
+#include <SPI.h>
+#include "SdFat.h"
 #include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
@@ -33,17 +34,20 @@ int mphLEDMax = 0;
 Adafruit_7segment sevSeg;
 
 //SD Card
-File dataFile;
-String fileName;
-const String fileHeader = "Sample_";
+SdFat sd;
+SdFile dataFile;
+char fileName[13] = "datat00.csv";
+const uint8_t fileNameSize = 4;
 const byte chipSelect = 53;
+bool sdError = false;
 
 //Loop settings
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
 const int recordInerval = 10; //in millis
 const int ledInerval = 30; //in millis
-unsigned long startTime = 0;
+unsigned long lapTime = 0;
+unsigned long driverTime = 0;
 
 //Other Settings
 const byte recordSwitch = 2;
@@ -58,8 +62,8 @@ bool buttonLeftPressed = false;
 bool buttonRightPressed = false;
 
 int getRPM(int pin, int samples);
-void writeData(int arrayLength, String fileName);
-String generateFileName(String fh,int cs, bool skipSDInit);
+void writeData(int arrayLength);
+void generateFileName(int cs, bool skipSDInit);
 int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
@@ -89,8 +93,8 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
 
   //Check if sd card is present
-  fileName = generateFileName(fileHeader,chipSelect,false);
-  if(fileName.compareTo("") == 0)
+  generateFileName(chipSelect,false);
+  if(sdError)
   {
     //Card error
     Serial.println("SD Error");
@@ -102,7 +106,7 @@ void setup() {
       delay(1000);
     }
   }
-
+  //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
   FastLED.setBrightness(225* .05);
   leds[23].red = 255;
@@ -122,10 +126,11 @@ void loop() {
     unsigned long currentTime = millis();
     if(stop == 1)
       {
+        sd.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
         digitalWrite(LED_BUILTIN,HIGH);
         stop = 0;
-        //Serial.println(stop);
-        startTime = currentTime;
+        lapTime = currentTime;
+        driverTime = lapTime;
       }
     if(currentTime - prevMillisRec >= recordInerval)
     {
@@ -180,7 +185,7 @@ void loop() {
       switch(displayMode)
       {
         case 0:
-          displayTime(milliToMinSec(currentTime-startTime));
+          displayTime(milliToMinSec(currentTime-lapTime));
           sevSeg.drawColon(true);
           break;
         case 1:
@@ -212,9 +217,10 @@ void loop() {
   {
     //Serial.println("Not recording");
     stop = 1;
+    dataFile.close();
     //Serial.println(stop);
     digitalWrite(LED_BUILTIN,LOW);
-    fileName = generateFileName(fileHeader,chipSelect,true);
+    generateFileName(chipSelect,true);
     updateMPHLED(0, 0, mphLEDMax, 1);
     updateRPMLED(6, 0, engLEDMax, 1);
   }
@@ -231,48 +237,59 @@ int getRPM(int pin, int samples)
   return avgRPM/samples;
 }
 
-void writeData(int arrayLength, String fileName)
+void writeData(int arrayLength)
 {
-  dataFile = SD.open(fileName, FILE_WRITE);
   for(int i = 0; i < arrayLength/2; i++)
   {
-    dataFile.println(String(rpmArray[i]) + "," + String(rpmArray[(i) + rpmArrayLen/2]));
+    dataFile.print(rpmArray[i]);
+    dataFile.write(',');
+    dataFile.print(rpmArray[rpmArrayLen/2]);
   }
-  dataFile.close();
+  dataFile.println();
+
+  //This writes data to the card and updates and internal variables
+  //This is the same as closing and opening the file but faster
+  dataFile.sync();
 }
 
-String generateFileName(String fh,int cs, bool skipSDInit)
+void generateFileName(int cs, bool skipSDInit)
 {
-  int fileHeaderCount = 0;
-  String fn;
-  bool sdReady;
-
   //Run look if start up is false or the SD library hasn't been
   //initalized yet
   if(!skipSDInit)
-    sdReady = SD.begin(cs);
+  {
+    if(!sd.begin(cs,SD_SCK_MHZ(50)))
+    {
+      #ifdef DEBUG
+        Serial.println("SD cannot be initalized");
+      #endif
+      sdError = true;
+    }
+  }
   else
-    sdReady = true;
-
-  if(sdReady)
   {
     //SD card is present
     //Check for other files and create new one
-    while(SD.exists(fh + String(fileHeaderCount)+".txt"))
+    while(sd.exists(fileName))
     {
-      //Keep incrementing the file name until you reach the end
-      fileHeaderCount++;
+      if (fileName[fileNameSize + 1] != '9')
+      {
+        fileName[fileNameSize + 1]++;
+      }
+      else if (fileName[fileNameSize] != '9')
+      {
+        fileName[fileNameSize + 1] = '0';
+        fileName[fileNameSize]++;
+      }
+       else
+      {
+        #ifdef DEBUG
+          Serial.println("Can't create file name");
+        #endif
+      }
     }
-     fn = fh + String(fileHeaderCount) + ".txt";
-    Serial.println(fn);
+    Serial.println(fileName);
   }
-  else
-  {
-    //No sd card. Notify user
-    Serial.println("No SD");
-    fn =  "";
-  }
-  return fn;
 }
 
 int updateMPHLED(int start, int numLED, int maxLED, int color)
@@ -350,13 +367,10 @@ int updateRPMLED(int start, int numLED, int maxLED, int color)
           }
           else if(i > start+10 && i < start+15)
           {
-            //leds[i].g = 255;
-            //leds[i].r = 255;
             leds[i] = CRGB::Yellow;
           }
           else
           {
-            //leds[i].g = 255;
             leds[i] = CRGB::Green;
           }
         }
@@ -375,7 +389,6 @@ int  milliToMinSec(long milli)
 {
   int sec = (milli/1000 % 60);
   int min = (milli/60000) * 100;
-  //Serial.println(min + sec);
   return min + sec;
 }
 
@@ -405,7 +418,7 @@ int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
   {
     //Add lap and reset sev seg timer
     laps++;
-    startTime = millis();
+    lapTime = millis();
     resetLap = true;
     #ifdef DEBUG
       Serial.println("lap reset");
@@ -448,8 +461,6 @@ int checkButtons(int currDisplayMode,int buttonOne, int buttonTwo)
       buttonLeftPressed = false;
     }
   }
-
-
   return currDisplayMode;
 }
 
