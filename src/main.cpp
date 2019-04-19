@@ -25,7 +25,7 @@ bool writingData = false;
 
 //Each dial has 24 leds but to make it look like a dial we only use 18
 #define NUM_LEDS 48
-#define DATA_PIN 6
+#define DATA_PIN 9
 CRGB leds[NUM_LEDS];
 int engLEDMax = 0;
 int mphLEDMax = 0;
@@ -36,9 +36,9 @@ Adafruit_7segment sevSeg;
 //SD Card
 SdFat sd;
 SdFile dataFile;
-char fileName[13] = "datat00.csv";
+char fileName[13] = "data00.csv";
 const uint8_t fileNameSize = 4;
-const byte chipSelect = 53;
+const byte chipSelect = 10;
 bool sdError = false;
 
 //Loop settings
@@ -50,18 +50,20 @@ unsigned long lapTime = 0;
 unsigned long driverTime = 0;
 
 //Other Settings
-const byte recordSwitch = 2;
-bool stop = 0;
-bool startUp = 1;
-const byte leftBut = 3;
-const byte rightBut = 4;
+const byte recordSwitch = 6;
+bool stop = false;
+//bool startUp = true;
+const byte leftBut = 7;
+const byte rightBut = 8;
+const byte redLED = 5;
+const byte grnLED = 4;
 byte laps = 0;
 byte displayMode = 0;
 bool resetLap = false;
 bool butLeftPressed = false;
 bool butRightPressed = false;
-unsigned int butLeftHoldLen = 0;
-unsigned int butRightHoldLen = 0;
+unsigned int butLeftHoldLen = 5000;
+unsigned int butRightHoldLen = 5000;
 
 int getRPM(int pin, int samples);
 void writeData(int arrayLength);
@@ -89,12 +91,14 @@ void setup() {
   #endif
 
   pinMode(recordSwitch, INPUT);
-  pinMode(LED_BUILTIN,OUTPUT);
   pinMode(leftBut,INPUT);
   pinMode(rightBut,INPUT);
-  pinMode(12,OUTPUT);
+  pinMode(redLED,OUTPUT);
+  pinMode(grnLED,OUTPUT);
+  pinMode(2,OUTPUT);
 
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(redLED, HIGH);
+  digitalWrite(grnLED, LOW);
 
   //Check if sd card is present
   generateFileName(chipSelect,false);
@@ -104,22 +108,22 @@ void setup() {
     Serial.println("SD Error");
     while(1)
     {
-      digitalWrite(LED_BUILTIN, HIGH);
+      digitalWrite(redLED, LOW);
       delay(1000);
-      digitalWrite(LED_BUILTIN,LOW);
+      digitalWrite(redLED,HIGH);
       delay(1000);
     }
   }
   //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* .05);
+  FastLED.setBrightness(225* .25);
   leds[23].red = 255;
   leds[47].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
   sevSeg.begin(0x70);
-  sevSeg.setBrightness(16*.5);
+  sevSeg.setBrightness(16*1);
   sevSeg.print(0000, DEC);
   sevSeg.writeDisplay();
 }
@@ -128,11 +132,16 @@ void loop() {
   if(digitalRead(recordSwitch))
   {
     unsigned long currentTime = millis();
-    if(stop == 1)
+    if(stop)
       {
+        #ifdef DEBUG
+          Serial.println("Recording");
+        #endif
+
         sd.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
-        digitalWrite(LED_BUILTIN,HIGH);
-        stop = 0;
+        digitalWrite(grnLED, HIGH);
+        digitalWrite(redLED,LOW);
+        stop = false;
         lapTime = currentTime;
         driverTime = lapTime;
       }
@@ -157,9 +166,11 @@ void loop() {
       {
         //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
-        //writeData(rpmArrayLen/2,fileName);
+        digitalWrite(2, HIGH);
+        writeData(rpmArrayLen/2);
         collectionCounter = 0;
         writingData = true;
+        digitalWrite(2,LOW);
       }
       else if(writingData)
       {
@@ -168,7 +179,7 @@ void loop() {
     }
     if(!writingData && currentTime - prevMillisLED >= ledInerval)
     {
-      digitalWrite(12,HIGH);
+      //digitalWrite(2,HIGH);
       prevMillisLED = currentTime;
       //Serial.println("Updating display");
       //Calculate Values extra 1000 is for wheelCircum
@@ -215,19 +226,21 @@ void loop() {
           break;
       }
       sevSeg.writeDisplay();
-      digitalWrite(12,LOW);
+      //digitalWrite(2,LOW);
     }
   }
   else if(!stop && !digitalRead(recordSwitch))
   {
-    //Serial.println("Not recording");
-    stop = 1;
+    Serial.println("Not recording");
+    stop = true;
     dataFile.close();
-    //Serial.println(stop);
-    digitalWrite(LED_BUILTIN,LOW);
+
+    digitalWrite(redLED, HIGH);
+    digitalWrite(grnLED,LOW);
     generateFileName(chipSelect,true);
     updateMPHLED(0, 0, mphLEDMax, 1);
     updateRPMLED(6, 0, engLEDMax, 1);
+    sevSeg.print(0000);
   }
 }
 
@@ -249,9 +262,8 @@ void writeData(int arrayLength)
     dataFile.print(rpmArray[i]);
     dataFile.write(',');
     dataFile.print(rpmArray[rpmArrayLen/2]);
+    dataFile.println();
   }
-  dataFile.println();
-
   //This writes data to the card and updates and internal variables
   //This is the same as closing and opening the file but faster
   dataFile.sync();
@@ -401,6 +413,7 @@ int milliToHourMin(long milli)
 {
   int min = (milli/60000) * 100;
   int hr  = (min/60);
+  Serial.print(hr);
   return hr+min;
 }
 
@@ -450,7 +463,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     if(currDisplayMode == 2)
     {
       //In driver time
-      driverTime = lapTime;
+      driverTime = millis();
     }
   }
   else if(resetLap && !butLeftState && !butRightState)
@@ -495,6 +508,9 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
 
 bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger)
 {
+  #ifdef DEBUG
+    Serial.println("Button held");
+  #endif
   return buttonHeldLength >= buttonHeldLengthTrigger;
 }
 
