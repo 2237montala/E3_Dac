@@ -9,8 +9,8 @@
 
 #define DEBUG 1
 
-int engineRPMPin = A0; //Engine rpm pin from lm2907
-int secondRPMPin = A1; //Secondard rpm pin from lm2907
+int engineRPMPin = A1; //Engine rpm pin from lm2907
+int secondRPMPin = A0; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
 int mph = 18;
@@ -36,7 +36,7 @@ Adafruit_7segment sevSeg;
 //SD Card
 SdFat sd;
 SdFile dataFile;
-char fileName[13] = "data00.csv";
+char fileName[13] = "data000.csv";
 const uint8_t fileNameSize = 4;
 const byte chipSelect = 10;
 bool sdError = false;
@@ -44,7 +44,7 @@ bool sdError = false;
 //Loop settings
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
-const int recordInerval = 10; //in millis
+const int recordInerval = 15; //in millis
 const int ledInerval = 30; //in millis
 unsigned long lapTime = 0;
 unsigned long driverTime = 0;
@@ -68,6 +68,7 @@ unsigned int butRightHoldLen = 5000;
 int getRPM(int pin, int samples);
 void writeData(int arrayLength);
 void generateFileName(int cs, bool skipSDInit);
+void writeHeader();
 int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
@@ -106,6 +107,7 @@ void setup() {
   {
     //Card error
     Serial.println("SD Error");
+    digitalWrite(grnLED,HIGH);
     while(1)
     {
       digitalWrite(redLED, LOW);
@@ -117,8 +119,8 @@ void setup() {
   //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
   FastLED.setBrightness(225* .25);
-  leds[23].red = 255;
-  leds[47].red = 255;
+  leds[18].red = 255;
+  leds[40].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
@@ -138,7 +140,8 @@ void loop() {
           Serial.println("Recording");
         #endif
 
-        sd.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
+        dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
+        writeHeader();
         digitalWrite(grnLED, HIGH);
         digitalWrite(redLED,LOW);
         stop = false;
@@ -164,7 +167,7 @@ void loop() {
 
       if(collectionCounter > rpmArrayLen/2)
       {
-        //After 50 cycles it should be about 0.5 seconds before a write
+        //After 50 cycles it should be about 0.75 seconds before a write
         //Save data to sd card
         digitalWrite(2, HIGH);
         writeData(rpmArrayLen/2);
@@ -240,7 +243,8 @@ void loop() {
     generateFileName(chipSelect,true);
     updateMPHLED(0, 0, mphLEDMax, 1);
     updateRPMLED(6, 0, engLEDMax, 1);
-    sevSeg.print(0000);
+    //sevSeg.print(0000,DEC);
+    //sevSeg.writeDisplay();
   }
 }
 
@@ -257,6 +261,7 @@ int getRPM(int pin, int samples)
 
 void writeData(int arrayLength)
 {
+  //Serial.println("Writing data");
   for(int i = 0; i < arrayLength/2; i++)
   {
     dataFile.print(rpmArray[i]);
@@ -267,6 +272,12 @@ void writeData(int arrayLength)
   //This writes data to the card and updates and internal variables
   //This is the same as closing and opening the file but faster
   dataFile.sync();
+}
+
+void writeHeader() {
+  dataFile.print(F("Engine RPM"));
+  dataFile.print(F(",Secondary RPM"));
+  dataFile.println();
 }
 
 void generateFileName(int cs, bool skipSDInit)
@@ -289,8 +300,13 @@ void generateFileName(int cs, bool skipSDInit)
     //Check for other files and create new one
     while(sd.exists(fileName))
     {
-      if (fileName[fileNameSize + 1] != '9')
+      if (fileName[fileNameSize + 2] != '9')
       {
+        fileName[fileNameSize + 2]++;
+      }
+      else if (fileName[fileNameSize + 1] != '9')
+      {
+        fileName[fileNameSize + 2] = '0';
         fileName[fileNameSize + 1]++;
       }
       else if (fileName[fileNameSize] != '9')
