@@ -44,7 +44,7 @@ bool sdError = false;
 //Loop settings
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
-const int recordInerval = 15; //in millis
+const int recordInerval = 10; //in millis
 const int ledInerval = 30; //in millis
 unsigned long lapTime = 0;
 unsigned long driverTime = 0;
