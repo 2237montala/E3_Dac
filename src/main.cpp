@@ -45,7 +45,7 @@ bool sdError = false;
 //Loop settings
 unsigned long prevMillisRec = 0;
 unsigned long prevMillisLED = 0;
-const int recordInerval = 15; //in millis
+const int recordInerval = 10; //in millis
 const int ledInerval = 30; //in millis
 unsigned long lapTime = 0;
 unsigned long driverTime = 0;
@@ -63,8 +63,8 @@ byte displayMode = 0;
 bool resetLap = false;
 bool butLeftPressed = false;
 bool butRightPressed = false;
-unsigned int butLeftHoldLen = 5000;
-unsigned int butRightHoldLen = 5000;
+unsigned int butLeftHoldLen = 0;
+unsigned int butRightHoldLen = 0;
 bool recordMenuOpt = false;
 bool recording = false;
 
@@ -171,25 +171,25 @@ void loop() {
         driverTime = lapTime;
         recording = true;
       }
-    else if(!stop && (!digitalRead(recordSwitch) || recordMenuOpt))
-      {
-        #ifdef DEBUG
-          Serial.println("Not Recording");
-        #endif
-
-        stop = true;
-        recording = false;
-        dataFile.close();
-
-        digitalWrite(redLED, HIGH);
-        digitalWrite(grnLED,LOW);
-        generateFileName(chipSelect,true);
-        //updateMPHLED(0, 0, mphLEDMax, 1);
-        //updateRPMLED(6, 0, engLEDMax, 1);
-        //sevSeg.print(0000,DEC);
-        //sevSeg.writeDisplay();
-      }
   }
+  else if(!stop && (!digitalRead(recordSwitch) || recordMenuOpt))
+    {
+      #ifdef DEBUG
+        Serial.println("Not Recording");
+      #endif
+
+      stop = true;
+      recording = false;
+      dataFile.close();
+
+      digitalWrite(redLED, HIGH);
+      digitalWrite(grnLED,LOW);
+      generateFileName(chipSelect,true);
+      //updateMPHLED(0, 0, mphLEDMax, 1);
+      //updateRPMLED(6, 0, engLEDMax, 1);
+      //sevSeg.print(0000,DEC);
+      //sevSeg.writeDisplay();
+    }
 
   if(currentTime - prevMillisRec >= recordInerval)
   {
@@ -210,7 +210,7 @@ void loop() {
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
       collectionCounter++;
 
-      if(collectionCounter > rpmArrayLen/2)
+      if(collectionCounter > rpmArrayLen/2-1)
       {
         //After 50 cycles it should be about 0.75 seconds before a write
         //Save data to sd card
@@ -227,56 +227,78 @@ void loop() {
     }
   }
 
-  if(!writingData && currentTime - prevMillisLED >= ledInerval)
+  if(currentTime - prevMillisRec >= recordInerval)
+      Serial.println("Missed record");
+
+  if(currentTime - prevMillisLED >= ledInerval)
   {
-    //digitalWrite(2,HIGH);
-    prevMillisLED = currentTime;
-    //Serial.println("Updating display");
-    //Calculate Values extra 1000 is for wheelCircum
-    //mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
-    //Serial.println(mph);
-
-    //Update the led rings
-    int numLEDtoLight = map(engineRPM,0,655,0,18);
-    //Update the leds and set the max led to a new value
-    engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
-
-    numLEDtoLight = map(secondRPM,0,655,0,18);
-    //Update the leds and set the max led to a new value
-    mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
-
-    //Update seven segment Display
-    displayMode = checkButtons(displayMode,leftBut,rightBut);
-    switch(displayMode)
+    if(writingData)
     {
-      case 0:
-        displayTime(milliToMinSec(currentTime-lapTime));
-        sevSeg.drawColon(true);
-        break;
-      case 1:
-        sevSeg.drawColon(false);
-        sevSeg.print(laps,DEC);
-        break;
-      case 2:
-        //driver time
-        displayTime(milliToHourMin(currentTime-driverTime));
-        sevSeg.drawColon(true);
-        break;
-      case 3:
-        //engineRPM
-        sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
-        break;
-      case 4:
-        //secondary rpm
-        sevSeg.print(calculateTrueSeconardRPM(secondRPM),DEC);
-        break;
-      case 5:
-        //mph
-        sevSeg.print(mph,DEC);
-        break;
+      Serial.println("Skip update");
     }
-    sevSeg.writeDisplay();
-    //digitalWrite(2,LOW);
+    else
+    {
+      //digitalWrite(2,HIGH);
+      prevMillisLED = currentTime;
+      //Serial.println("Updating display");
+      //Calculate Values extra 1000 is for wheelCircum
+      //mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
+      //Serial.println(mph);
+
+      //Update the led rings
+      int numLEDtoLight = map(engineRPM,0,655,0,18);
+      //Update the leds and set the max led to a new value
+      engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+
+      numLEDtoLight = map(secondRPM,0,655,0,18);
+      //Update the leds and set the max led to a new value
+      mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+
+      //Update seven segment Display
+      displayMode = checkButtons(displayMode,leftBut,rightBut);
+      switch(displayMode)
+      {
+        case 0:
+          displayTime(milliToMinSec(currentTime-lapTime));
+          sevSeg.drawColon(true);
+          break;
+        case 1:
+          sevSeg.drawColon(false);
+          sevSeg.print(laps,DEC);
+          break;
+        case 2:
+          //driver time
+          displayTime(milliToHourMin(currentTime-driverTime));
+          sevSeg.drawColon(true);
+          break;
+        case 3:
+          //engineRPM
+          sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
+          break;
+        case 4:
+          //secondary rpm
+          sevSeg.print(calculateTrueSeconardRPM(secondRPM),DEC);
+          break;
+        case 5:
+          //mph
+          sevSeg.print(mph,DEC);
+          break;
+        case 6:
+                                //GFEDCBA
+          sevSeg.drawColon(false);
+          sevSeg.writeDigitRaw(0,B0110001);
+          sevSeg.writeDigitRaw(1,B1111001);
+          sevSeg.writeDigitRaw(3,B0111001);
+          if(recordMenuOpt)
+            sevSeg.writeDigitRaw(4,B1000000);
+          else
+            sevSeg.writeDigitRaw(4,B0000000);
+          break;
+
+      }
+      sevSeg.writeDisplay();
+      //digitalWrite(2,LOW);
+    }
   }
 }
 
@@ -294,17 +316,17 @@ int getRPM(int pin, int samples)
 void writeData(int arrayLength)
 {
   //Serial.println("Writing data");
-  for(int i = 0; i < arrayLength/2; i++)
+  for(int i = 0; i < arrayLength; i++)
   {
     dataFile.print(rpmArray[i]);
     dataFile.write(',');
-    dataFile.print(rpmArray[rpmArrayLen/2]);
+    dataFile.print(rpmArray[arrayLength + i]);
     dataFile.println();
   }
   writeCount++;
   //This writes data to the card and updates and internal variables
   //This is the same as closing and opening the file but faster
-  if (writeCount == 1)
+  if (writeCount == 3)
     dataFile.sync();
     writeCount = 0;
 }
@@ -464,7 +486,7 @@ int milliToMinSec(long milli)
 
 int milliToHourMin(long milli)
 {
-  int min = (milli/60000) * 100;
+  int min = (milli/60000);
   int hr  = (min/60);
   return hr+min;
 }
@@ -473,6 +495,7 @@ void displayTime(long currTime)
 {
   for(int i = 0;i < 5; i++)
   {
+    //Index 2 is the colon so we skip it
     if(i < 2)
     {
       sevSeg.writeDigitNum(4-i,currTime % 10);
@@ -491,18 +514,22 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
 {
   bool butLeftState = digitalRead(butLeft);
   bool butRightState = digitalRead(butRight);
+
   //If the buttons are being held then increment the time they have been
-  if(butLeftState)
-    butLeftHoldLen += ledInerval;
-  else
-    butLeftHoldLen = 0;
+  // if(butLeftState)
+  //   butLeftHoldLen += ledInerval;
+  // else
+  //   butLeftHoldLen = 0;
+  //
+  // if(butRightState)
+  //   butRightHoldLen += ledInerval;
+  // else
+  //   butRightHoldLen=0;
 
-  if(butRightState)
-    butRightHoldLen += ledInerval;
-  else
-    butRightHoldLen=0;
+  //bool butLeftHoldState = buttonHeld(butLeftHoldLen, 2000);
+  //bool butRightHoldState = buttonHeld(butRightHoldLen, 2000);
 
-  if(!resetLap && butLeftState && butRightState)
+  if((currDisplayMode == 0 || currDisplayMode == 1  || currDisplayMode == 2) && !resetLap && butLeftState && butRightState)
   {
     //Add lap and reset sev seg timer
     laps++;
@@ -522,6 +549,12 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   {
     resetLap = false;
   }
+
+  else if(currDisplayMode == 6 && butLeftState && !butLeftPressed && butRightState && !butRightPressed)
+  {
+    recordMenuOpt = !recordMenuOpt;
+  }
+
   else if(!butLeftPressed && butLeftState)
   {
     //Move display left
@@ -537,7 +570,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   {
     //Move display right
     butRightPressed = true;
-    if(currDisplayMode != 5)
+    if(currDisplayMode != 6)
       currDisplayMode += 1;
 
     #ifdef DEBUG
@@ -560,9 +593,6 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
 
 bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger)
 {
-  #ifdef DEBUG
-    Serial.println("Button held");
-  #endif
   return buttonHeldLength >= buttonHeldLengthTrigger;
 }
 
