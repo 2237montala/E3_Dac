@@ -7,15 +7,19 @@
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 int engineRPMPin = A1; //Engine rpm pin from lm2907
 int secondRPMPin = A0; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
-int mph = 18;
 const float reduction = 9.48; //Gear box rpm reduction
-const float wheelCircum = 23; //in inches
+const int wheelDia = 23; //in inches
+int rpmToMphFactor = 0; //Factor to multiply rpm value to get mph.
+//This number needs to be divided by 10 later
+
+int mph = 0;
+
 
 
 #define rpmArrayLen 100
@@ -81,18 +85,25 @@ void displayTime(long currTime);
 int checkButtons(int currDisplayMode,int butLeft, int butRight);
 bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger);
 int calculateTrueEngineRPM(int analogPinValue);
-int calculateTrueSeconardRPM(int analogPinValue);
+int calculateTrueSecondaryRPM(int analogPinValue);
 
 void setup() {
+  #ifdef DEBUG
+    Serial.begin(9600);
+  #endif
+
+  rpmToMphFactor = (60*wheelDia*3.14)/63;
+
+  #ifdef DEBUG
+    Serial.println(rpmToMphFactor);
+  #endif
+
   //analogReference(EXTERNAL);
   //Initialize values in array to -1
   for(int i = 0; i < rpmArrayLen; i++)
   {
     rpmArray[i] = -1;
   }
-  #ifdef DEBUG
-    Serial.begin(9600);
-  #endif
 
   pinMode(recordSwitch, INPUT);
   pinMode(leftBut,INPUT);
@@ -121,7 +132,7 @@ void setup() {
   if(sdError)
   {
     //Card error
-    Serial.println("SD Error");
+    //Serial.println("SD Error");
     digitalWrite(grnLED,HIGH);
     bool runWithSD = true;
     while(runWithSD)
@@ -144,10 +155,10 @@ void setup() {
         runWithSD = false;
 
         //Create visual indicator that data will not be saved
-        for(int i = 0; i < 6;i++)
+        for(int i = 0; i < 4;i++)
         {
-          leds[18+i] = CRGB::Red;
-          leds[32+i] = CRGB::Red;
+          leds[7+i] = CRGB::Red;
+          FastLED.show();
         }
 } } } }
 
@@ -161,6 +172,12 @@ void loop() {
         #ifdef DEBUG
           Serial.println("Recording");
         #endif
+
+        for(int i = 0; i < 4;i++)
+        {
+          leds[25+i] = CRGB::Red;
+          FastLED.show();
+        }
 
         dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
         writeHeader();
@@ -181,6 +198,13 @@ void loop() {
       stop = true;
       recording = false;
       dataFile.close();
+
+      //Create a visual indicator
+      for(int i = 0; i < 4;i++)
+      {
+        leds[25+i] = CRGB::Green;
+        FastLED.show();
+      }
 
       digitalWrite(redLED, HIGH);
       digitalWrite(grnLED,LOW);
@@ -227,78 +251,68 @@ void loop() {
     }
   }
 
-  if(currentTime - prevMillisRec >= recordInerval)
-      Serial.println("Missed record");
-
-  if(currentTime - prevMillisLED >= ledInerval)
+  if(!writingData && currentTime - prevMillisLED >= ledInerval)
   {
-    if(writingData)
+    //digitalWrite(2,HIGH);
+    prevMillisLED = currentTime;
+    //Serial.println("Updating display");
+    //Calculate mph by dividing the secondary rpm by the gear reduction
+    //the multiplying it by the conversion factor then dividing by 1000
+    //The 1000 is to make the factor a integer as integer math is fast on the
+    //arduino that float math
+    mph = ((calculateTrueSecondaryRPM(secondRPM)/reduction)*rpmToMphFactor)/1000;
+    //Serial.println(mph);
+
+    //Update the led rings
+    int numLEDtoLight = map(engineRPM,0,655,0,18);
+    //Update the leds and set the max led to a new value
+    engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+
+    numLEDtoLight = map(mph,0,35,0,18);
+    //Update the leds and set the max led to a new value
+    mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+
+    //Update seven segment Display
+    displayMode = checkButtons(displayMode,leftBut,rightBut);
+    switch(displayMode)
     {
-      Serial.println("Skip update");
+      case 0:
+        displayTime(milliToMinSec(currentTime-lapTime));
+        sevSeg.drawColon(true);
+        break;
+      case 1:
+        sevSeg.drawColon(false);
+        sevSeg.print(laps,DEC);
+        break;
+      case 2:
+        //driver time
+        displayTime(milliToHourMin(currentTime-driverTime));
+        sevSeg.drawColon(true);
+        break;
+      case 3:
+        //engineRPM
+        sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
+        break;
+      case 4:
+        //secondary rpm
+        sevSeg.print(calculateTrueSecondaryRPM(secondRPM),DEC);
+        break;
+      case 5:
+        //mph
+        sevSeg.print(mph,DEC);
+        break;
+      case 6:
+                              //GFEDCBA
+        sevSeg.drawColon(false);
+        sevSeg.writeDigitRaw(0,B0110001); //R
+        sevSeg.writeDigitRaw(1,B1111001); //E
+        sevSeg.writeDigitRaw(3,B0111001); //C
+        sevSeg.writeDigitRaw(4,B0000000);
+        break;
+
     }
-    else
-    {
-      //digitalWrite(2,HIGH);
-      prevMillisLED = currentTime;
-      //Serial.println("Updating display");
-      //Calculate Values extra 1000 is for wheelCircum
-      //mph = (wheelCircum * (secondRPM/reduction))/88; //Unrounded mph
-      //Serial.println(mph);
-
-      //Update the led rings
-      int numLEDtoLight = map(engineRPM,0,655,0,18);
-      //Update the leds and set the max led to a new value
-      engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
-
-      numLEDtoLight = map(secondRPM,0,655,0,18);
-      //Update the leds and set the max led to a new value
-      mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
-
-      //Update seven segment Display
-      displayMode = checkButtons(displayMode,leftBut,rightBut);
-      switch(displayMode)
-      {
-        case 0:
-          displayTime(milliToMinSec(currentTime-lapTime));
-          sevSeg.drawColon(true);
-          break;
-        case 1:
-          sevSeg.drawColon(false);
-          sevSeg.print(laps,DEC);
-          break;
-        case 2:
-          //driver time
-          displayTime(milliToHourMin(currentTime-driverTime));
-          sevSeg.drawColon(true);
-          break;
-        case 3:
-          //engineRPM
-          sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
-          break;
-        case 4:
-          //secondary rpm
-          sevSeg.print(calculateTrueSeconardRPM(secondRPM),DEC);
-          break;
-        case 5:
-          //mph
-          sevSeg.print(mph,DEC);
-          break;
-        case 6:
-                                //GFEDCBA
-          sevSeg.drawColon(false);
-          sevSeg.writeDigitRaw(0,B0110001);
-          sevSeg.writeDigitRaw(1,B1111001);
-          sevSeg.writeDigitRaw(3,B0111001);
-          if(recordMenuOpt)
-            sevSeg.writeDigitRaw(4,B1000000);
-          else
-            sevSeg.writeDigitRaw(4,B0000000);
-          break;
-
-      }
-      sevSeg.writeDisplay();
-      //digitalWrite(2,LOW);
-    }
+    sevSeg.writeDisplay();
+    //digitalWrite(2,LOW);
   }
 }
 
@@ -515,6 +529,8 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   bool butLeftState = digitalRead(butLeft);
   bool butRightState = digitalRead(butRight);
 
+
+
   //If the buttons are being held then increment the time they have been
   // if(butLeftState)
   //   butLeftHoldLen += ledInerval;
@@ -529,7 +545,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   //bool butLeftHoldState = buttonHeld(butLeftHoldLen, 2000);
   //bool butRightHoldState = buttonHeld(butRightHoldLen, 2000);
 
-  if((currDisplayMode == 0 || currDisplayMode == 1  || currDisplayMode == 2) && !resetLap && butLeftState && butRightState)
+  if((currDisplayMode >= 0 && currDisplayMode <= 2) && !resetLap && butLeftState && butRightState)
   {
     //Add lap and reset sev seg timer
     laps++;
@@ -558,7 +574,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   else if(!butLeftPressed && butLeftState)
   {
     //Move display left
-    butLeftPressed = true;
+    //butLeftPressed = true;
     if(currDisplayMode != 0)
       currDisplayMode -= 1;
 
@@ -569,7 +585,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   else if(!butRightPressed && butRightState)
   {
     //Move display right
-    butRightPressed = true;
+    //butRightPressed = true;
     if(currDisplayMode != 6)
       currDisplayMode += 1;
 
@@ -577,17 +593,36 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
       Serial.println(currDisplayMode);
     #endif
   }
+  // else
+  // {
+  //   if(!butRightState)
+  //   {
+  //     butRightPressed = false;
+  //   }
+  //   if(!butLeftState)
+  //   {
+  //     butLeftPressed = false;
+  //   }
+  // }
+
+  if(butLeftState)
+  {
+    butLeftPressed = true;
+  }
   else
   {
-    if(!butRightState)
-    {
-      butRightPressed = false;
-    }
-    if(!butLeftState)
-    {
-      butLeftPressed = false;
-    }
+    butLeftPressed = false;
   }
+
+  if(butRightState)
+  {
+    butRightPressed = true;
+  }
+  else
+  {
+    butRightPressed = false;
+  }
+
   return currDisplayMode;
 }
 
@@ -607,7 +642,7 @@ int calculateTrueEngineRPM(int analogPinValue)
   return rpm;
 }
 
-int calculateTrueSeconardRPM(int analogPinValue)
+int calculateTrueSecondaryRPM(int analogPinValue)
 {
   //The conversion factor is 14.49
   //long rpm = (analogPinValue * 6218) / 1000;
