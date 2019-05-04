@@ -9,18 +9,15 @@
 
 #define DEBUG 0
 
-int engineRPMPin = A1; //Engine rpm pin from lm2907
-int secondRPMPin = A0; //Secondard rpm pin from lm2907
+int engineRPMPin = A0; //Engine rpm pin from lm2907
+int secondRPMPin = A1; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
 const float reduction = 9.48; //Gear box rpm reduction
 const int wheelDia = 23; //in inches
 int rpmToMphFactor = 0; //Factor to multiply rpm value to get mph.
 //This number needs to be divided by 10 later
-
 int mph = 0;
-
-
 
 #define rpmArrayLen 100
 int rpmArray[rpmArrayLen]; //Array of rpms to be saved
@@ -58,8 +55,8 @@ unsigned long driverTime = 0;
 const byte recordSwitch = 6;
 bool stop = false;
 //bool startUp = true;
-const byte leftBut = 7;
-const byte rightBut = 8;
+const byte leftBut = 8;
+const byte rightBut = 7;
 const byte redLED = 5;
 const byte grnLED = 4;
 byte laps = 0;
@@ -181,8 +178,8 @@ void loop() {
 
         dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
         writeHeader();
-        digitalWrite(grnLED, HIGH);
-        digitalWrite(redLED,LOW);
+        digitalWrite(grnLED, LOW);
+        digitalWrite(redLED,HIGH);
         stop = false;
         lapTime = currentTime;
         driverTime = lapTime;
@@ -206,8 +203,8 @@ void loop() {
         FastLED.show();
       }
 
-      digitalWrite(redLED, HIGH);
-      digitalWrite(grnLED,LOW);
+      digitalWrite(redLED, LOW);
+      digitalWrite(grnLED,HIGH);
       generateFileName(chipSelect,true);
       //updateMPHLED(0, 0, mphLEDMax, 1);
       //updateRPMLED(6, 0, engLEDMax, 1);
@@ -236,7 +233,7 @@ void loop() {
 
       if(collectionCounter > rpmArrayLen/2-1)
       {
-        //After 50 cycles it should be about 0.75 seconds before a write
+        //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
         digitalWrite(2, HIGH);
         writeData(rpmArrayLen/2);
