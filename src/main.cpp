@@ -9,8 +9,8 @@
 
 #define DEBUG 0
 
-int engineRPMPin = A0; //Engine rpm pin from lm2907
-int secondRPMPin = A1; //Secondard rpm pin from lm2907
+int engineRPMPin = A1; //Engine rpm pin from lm2907
+int secondRPMPin = A0; //Secondard rpm pin from lm2907
 int engineRPM = 0; //Value for engine rpm
 int secondRPM = 0; //Value for secondary rpm
 const float reduction = 9.48; //Gear box rpm reduction
@@ -113,7 +113,7 @@ void setup() {
   digitalWrite(grnLED, LOW);
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* .25);
+  FastLED.setBrightness(225* .45);
   leds[18].red = 255;
   leds[40].red = 255;
   FastLED.show();
@@ -261,13 +261,13 @@ void loop() {
     //Serial.println(mph);
 
     //Update the led rings
-    int numLEDtoLight = map(engineRPM,0,655,0,18);
+    int numLEDtoLight = map(mph,0,40,0,18);
     //Update the leds and set the max led to a new value
-    engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+    mphLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
 
-    numLEDtoLight = map(mph,0,35,0,18);
+    numLEDtoLight = map(engineRPM,0,655,0,18);
     //Update the leds and set the max led to a new value
-    mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+    engLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
     //Update seven segment Display
     displayMode = checkButtons(displayMode,leftBut,rightBut);
@@ -556,6 +556,8 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     {
       //In driver time
       driverTime = millis();
+      //Don't want to increase laps if the driver time reset
+      laps--;
     }
   }
   else if(resetLap && !butLeftState && !butRightState)
