@@ -261,13 +261,13 @@ void loop() {
     //Serial.println(mph);
 
     //Update the led rings
-    int numLEDtoLight = map(mph,0,40,0,18);
+    int numLEDtoLight = map(engineRPM,0,655,0,18);
     //Update the leds and set the max led to a new value
-    mphLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
+    engLEDMax -= updateRPMLED(6,numLEDtoLight,engLEDMax,1);
 
-    numLEDtoLight = map(engineRPM,0,655,0,18);
+    numLEDtoLight = map(mph,0,40,0,18);
     //Update the leds and set the max led to a new value
-    engLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
+    mphLEDMax -= updateMPHLED(0,numLEDtoLight,mphLEDMax,1);
 
     //Update seven segment Display
     displayMode = checkButtons(displayMode,leftBut,rightBut);
