@@ -1,5 +1,4 @@
 #include <Arduino.h>
-//#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
 #include <SPI.h>
 #include "SdFat.h"
@@ -62,10 +61,14 @@ const byte grnLED = 4;
 byte laps = 0;
 byte displayMode = 0;
 bool resetLap = false;
+
 bool butLeftPressed = false;
 bool butRightPressed = false;
-unsigned int butLeftHoldLen = 0;
-unsigned int butRightHoldLen = 0;
+bool buttonActive = false;
+bool longPressActive = false;
+long buttonHeldTimer = 500;
+long buttonHeldLength = 0;
+
 bool recordMenuOpt = false;
 bool recording = false;
 
@@ -97,10 +100,7 @@ void setup() {
 
   //analogReference(EXTERNAL);
   //Initialize values in array to -1
-  for(int i = 0; i < rpmArrayLen; i++)
-  {
-    rpmArray[i] = -1;
-  }
+  memset(rpmArray,0,50);
 
   pinMode(recordSwitch, INPUT);
   pinMode(leftBut,INPUT);
@@ -117,7 +117,7 @@ void setup() {
   FastLED.setBrightness(255* .65);
   leds[18].red = 255;
   leds[40].red = 255;
-  FastLED.show()
+  FastLED.show();
 
   sevSeg = Adafruit_7segment();
   sevSeg.begin(0x70);
@@ -176,8 +176,8 @@ void loop() {
         for(int i = 0; i < 4;i++)
         {
           leds[25+i] = CRGB::Red;
-          FastLED.show();
         }
+        FastLED.show();
 
         dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
         writeHeader();
@@ -203,16 +203,12 @@ void loop() {
       for(int i = 0; i < 4;i++)
       {
         leds[25+i] = CRGB::Green;
-        FastLED.show();
       }
+      FastLED.show();
 
       digitalWrite(redLED, LOW);
       digitalWrite(grnLED,HIGH);
       generateFileName(chipSelect,true);
-      //updateMPHLED(0, 0, mphLEDMax, 1);
-      //updateRPMLED(6, 0, engLEDMax, 1);
-      //sevSeg.print(0000,DEC);
-      //sevSeg.writeDisplay();
     }
 
   if(currentTime - prevMillisRec >= recordInerval)
@@ -234,7 +230,7 @@ void loop() {
       rpmArray[collectionCounter+rpmArrayLen/2] = secondRPM;
       collectionCounter++;
 
-      if(collectionCounter > rpmArrayLen/2-1)
+      if(collectionCounter > (rpmArrayLen/2)-1)
       {
         //After 50 cycles it should be about 0.5 seconds before a write
         //Save data to sd card
@@ -253,9 +249,7 @@ void loop() {
 
   if(!writingData && currentTime - prevMillisLED >= ledInerval)
   {
-    //digitalWrite(2,HIGH);
     prevMillisLED = currentTime;
-    //Serial.println("Updating display");
     //Calculate mph by dividing the secondary rpm by the gear reduction
     //the multiplying it by the conversion factor then dividing by 1000
     //The 1000 is to make the factor a integer as integer math is fast on the
@@ -309,10 +303,8 @@ void loop() {
         sevSeg.writeDigitRaw(3,B0111001); //C
         sevSeg.writeDigitRaw(4,B0000000);
         break;
-
     }
     sevSeg.writeDisplay();
-    //digitalWrite(2,LOW);
   }
 }
 
@@ -529,102 +521,100 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
   bool butLeftState = digitalRead(butLeft);
   bool butRightState = digitalRead(butRight);
 
-
-
-  //If the buttons are being held then increment the time they have been
-  // if(butLeftState)
-  //   butLeftHoldLen += ledInerval;
-  // else
-  //   butLeftHoldLen = 0;
-  //
-  // if(butRightState)
-  //   butRightHoldLen += ledInerval;
-  // else
-  //   butRightHoldLen=0;
-
-  //bool butLeftHoldState = buttonHeld(butLeftHoldLen, 2000);
-  //bool butRightHoldState = buttonHeld(butRightHoldLen, 2000);
-
-  if((currDisplayMode >= 0 && currDisplayMode <= 2) && !resetLap && butLeftState && butRightState)
+  if(butLeftState == true)
   {
-    //Add lap and reset sev seg timer
-    laps++;
-    lapTime = millis();
-    resetLap = true;
-    #ifdef DEBUG
-      Serial.println("lap reset");
-    #endif
-
-    if(currDisplayMode == 2)
+    //If left button is pressed change its state
+    if(buttonActive == false)
     {
-      //In driver time
-      driverTime = millis();
-      //Don't want to increase laps if the driver time reset
-      laps--;
+      buttonActive = true;
+      buttonHeldLength = millis();
     }
-  }
-  else if(resetLap && !butLeftState && !butRightState)
-  {
-    resetLap = false;
-  }
-
-  else if(currDisplayMode == 6 && butLeftState && !butLeftPressed && butRightState && !butRightPressed)
-  {
-    recordMenuOpt = !recordMenuOpt;
-  }
-
-  else if(!butLeftPressed && butLeftState)
-  {
-    //Move display left
-    //butLeftPressed = true;
-    if(currDisplayMode != 0)
-      currDisplayMode -= 1;
-
-    #ifdef DEBUG
-      Serial.println(currDisplayMode);
-    #endif
-  }
-  else if(!butRightPressed && butRightState)
-  {
-    //Move display right
-    //butRightPressed = true;
-    if(currDisplayMode != 6)
-      currDisplayMode += 1;
-
-    #ifdef DEBUG
-      Serial.println(currDisplayMode);
-    #endif
-  }
-  // else
-  // {
-  //   if(!butRightState)
-  //   {
-  //     butRightPressed = false;
-  //   }
-  //   if(!butLeftState)
-  //   {
-  //     butLeftPressed = false;
-  //   }
-  // }
-
-  if(butLeftState)
-  {
     butLeftPressed = true;
   }
-  else
+
+  if(butRightState == true)
   {
-    butLeftPressed = false;
+    //If right button is pressed change its state
+    if(buttonActive == false)
+    {
+      buttonActive = true;
+      buttonHeldLength = millis();
+    }
+    butRightPressed=true;
   }
 
-  if(butRightState)
+  if((buttonActive == true && millis() - buttonHeldTimer > buttonHeldLength)
+      && longPressActive == false)
   {
-    butRightPressed = true;
+    //If any button is pressed and the button held timer is greater than the
+    //held button length. Enable the long press
+    longPressActive = true;
+
+    //Now do the long press action
+    if((currDisplayMode >= 0 && currDisplayMode <= 2) && butLeftState && butRightState)
+    {
+      //Add lap and reset sev seg timer
+      laps++;
+      lapTime = millis();
+      resetLap = true;
+      #ifdef DEBUG
+        Serial.println("lap reset");
+      #endif
+
+      if(currDisplayMode == 2)
+      {
+        //In driver time
+        driverTime = millis();
+        //Don't want to increase laps if the driver time reset
+        laps--;
+      }
+    }
+    else if(currDisplayMode == 6 && butLeftState && butRightState)
+    {
+      //If on the record menu and holding both buttons down, start recording
+      recordMenuOpt = !recordMenuOpt;
+    }
   }
-  else
+
+  if(buttonActive == true && butLeftState == false && butRightState == false)
   {
+    //If a button was pressed in the previous loop but now none are pressed
+    //Then disable the long press and change the button state vars
+    if(longPressActive == true)
+    {
+      longPressActive = false;
+    }
+    else
+    {
+      //Do you short press action
+      if(butLeftState)
+      {
+        //Move display left
+        //butLeftPressed = true;
+        if(currDisplayMode != 0)
+          currDisplayMode -= 1;
+
+        #ifdef DEBUG
+          Serial.println(currDisplayMode);
+        #endif
+      }
+      else if(butRightState)
+      {
+        //Move display right
+        //butRightPressed = true;
+        if(currDisplayMode != 6)
+          currDisplayMode += 1;
+
+        #ifdef DEBUG
+          Serial.println(currDisplayMode);
+        #endif
+      }
+    }
+
+    buttonActive = false;
+    butLeftPressed = false;
     butRightPressed = false;
   }
-
   return currDisplayMode;
 }
 
