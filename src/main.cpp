@@ -5,6 +5,7 @@
 #include <Wire.h> // Enable this line if using Arduino Uno, Mega, etc.
 #include <Adafruit_GFX.h>
 #include "Adafruit_LEDBackpack.h"
+#include "Misc.h"
 
 #define DEBUG 0
 
@@ -65,8 +66,8 @@ bool butLeftPressed = false;
 bool butRightPressed = false;
 bool buttonActive = false;
 bool longPressActive = false;
-long buttonHeldTimer = 500;
-long buttonHeldLength = 0;
+unsigned long buttonHeldTimer = 500;
+unsigned long buttonHeldLength = 0;
 
 //Sets how long the recording will be from pressing the steering wheel buttons
 const long recordMenuLen = 15*1000;
@@ -81,21 +82,17 @@ void writeHeader();
 int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
-int milliToMinSec(long milli);
-int milliToHourMin(long milli);
+//int milliToMinSec(long milli);
+//int milliToHourMin(long milli);
 void displayTime(long currTime);
 int checkButtons(int currDisplayMode,int butLeft, int butRight);
-bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger);
-int calculateTrueEngineRPM(int analogPinValue);
-int calculateTrueSecondaryRPM(int analogPinValue);
+//int calculateTrueEngineRPM(int analogPinValue);
+//int calculateTrueSecondaryRPM(int analogPinValue);
 
 void setup() {
-  #ifdef DEBUG
-    Serial.begin(9600);
-  #endif
+  Serial.begin(115200);
 
   rpmToMphFactor = (60*wheelDia*3.14)/63;
-
   //analogReference(EXTERNAL);
   //Initialize values in array to -1
   memset(rpmArray,0,rpmArrayLen);
@@ -194,8 +191,8 @@ void loop() {
         }
       }
   }
-  else if(!stop && (!digitalRead(recordSwitch) || recordMenuOpt)
-          || currentTime - recordMenuRecAmt > recordMenuLen)
+  else if(!stop && ((!digitalRead(recordSwitch) || recordMenuOpt)
+      || (currentTime - recordMenuRecAmt > recordMenuLen)))
     {
       //To stop recording the record switch has to be off or the steering wheel
       //buttons had to pressed or the recording amount has been reached for the steering wheel
@@ -262,7 +259,7 @@ void loop() {
     //the multiplying it by the conversion factor then dividing by 1000
     //The 1000 is to make the factor a integer as integer math is fast on the
     //arduino that float math
-    mph = ((calculateTrueSecondaryRPM(secondRPM)/reduction)*rpmToMphFactor)/1000;
+    mph = ((Misc::calculateTrueSecondaryRPM(secondRPM)/reduction)*rpmToMphFactor)/1000;
     //Serial.println(mph);
 
     //Update the led rings
@@ -279,7 +276,8 @@ void loop() {
     switch(displayMode)
     {
       case 0:
-        displayTime(milliToMinSec(currentTime-lapTime));
+        //displayTime(milliToMinSec(currentTime-lapTime));
+        displayTime(Misc::milliToMinSec(currentTime-lapTime));
         sevSeg.drawColon(true);
         break;
       case 1:
@@ -288,16 +286,16 @@ void loop() {
         break;
       case 2:
         //driver time
-        displayTime(milliToHourMin(currentTime-driverTime));
+        displayTime(Misc::milliToHourMin(currentTime-driverTime));
         sevSeg.drawColon(true);
         break;
       case 3:
         //engineRPM
-        sevSeg.print(calculateTrueEngineRPM(engineRPM),DEC);
+        sevSeg.print(Misc::calculateTrueEngineRPM(engineRPM),DEC);
         break;
       case 4:
         //secondary rpm
-        sevSeg.print(calculateTrueSecondaryRPM(secondRPM),DEC);
+        sevSeg.print(Misc::calculateTrueSecondaryRPM(secondRPM),DEC);
         break;
       case 5:
         //mph
@@ -313,6 +311,52 @@ void loop() {
         break;
     }
     sevSeg.writeDisplay();
+  }
+
+  if(stop && Serial.available()>0)
+  {
+    //If the DAQ isn't currently recording data and if there is
+    //any serial data then check if its the send data command
+    char data = Serial.read();
+    if(data == 't') //t for trasnfer
+    {
+      //Send the contents of the sd card
+      //Open base directory
+      //See if a file exists
+      //If it does the print every line to Serial
+      //Add a delim value and repeat
+      SdFile root;
+      SdFile file;
+
+      if(!root.open("/"))
+      {
+        Serial.println("Cannot open root directory");
+      }
+      while(file.openNext(&root,O_RDONLY))
+      {
+        //While there are still files in the queue
+        char fName[13];
+        char line[25];
+        file.getName(fName,13);
+        if(fName[0]=='d' && fName[1] == 'a')
+        {
+          Serial.println(fName);
+          Serial.println("--------");
+          while(file.fgets(line,sizeof(line))>0)
+          {
+            Serial.print(line);
+          }
+          Serial.println("--------");
+        }
+        file.close();
+      }
+
+    }
+    else if(data == 'd')
+    {
+      //Delete the files on the sd card
+    }
+    Serial.flush();
   }
 }
 
@@ -491,20 +535,6 @@ int map(int x, int in_min, int in_max, int out_min, int out_max)
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-int milliToMinSec(long milli)
-{
-  int sec = (milli/1000 % 60);
-  int min = (milli/60000) * 100;
-  return min + sec;
-}
-
-int milliToHourMin(long milli)
-{
-  int min = (milli/60000);
-  int hr  = (min/60);
-  return hr+min;
-}
-
 void displayTime(long currTime)
 {
   for(int i = 0;i < 5; i++)
@@ -624,31 +654,4 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     butRightPressed = false;
   }
   return currDisplayMode;
-}
-
-bool buttonHeld(int buttonHeldLength, int buttonHeldLengthTrigger)
-{
-  return buttonHeldLength >= buttonHeldLengthTrigger;
-}
-
-int calculateTrueEngineRPM(int analogPinValue)
-{
-  //The conversion factor is 6.218
-  //long rpm = (analogPinValue * 6218) / 1000;
-  int rpm = (analogPinValue)* 6.218;
-  #ifdef DEBUG
-    //Serial.println(rpm);
-  #endif
-  return rpm;
-}
-
-int calculateTrueSecondaryRPM(int analogPinValue)
-{
-  //The conversion factor is 14.49
-  //long rpm = (analogPinValue * 6218) / 1000;
-  int rpm = (analogPinValue)* 14.49;
-  #ifdef DEBUG
-    //Serial.println(rpm);
-  #endif
-  return rpm;
 }
