@@ -112,11 +112,12 @@ void setup() {
   digitalWrite(redLED, HIGH);
   digitalWrite(grnLED, LOW);
 
+  //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* .45);
+  FastLED.setBrightness(255* .65);
   leds[18].red = 255;
   leds[40].red = 255;
-  FastLED.show();
+  FastLED.show()
 
   sevSeg = Adafruit_7segment();
   sevSeg.begin(0x70);
@@ -145,19 +146,21 @@ void setup() {
       FastLED.show();
       digitalWrite(redLED,HIGH);
       delay(1000);
+    }
+    if(digitalRead(leftBut) && digitalRead(rightBut))
+    {
+      //If both buttons are pressed then run program without sd saving
+      runWithSD = false;
 
-      if(digitalRead(leftBut) && digitalRead(rightBut))
+      //Create visual indicator that data will not be saved
+      for(int i = 0; i < 4;i++)
       {
-        //If both buttons are pressed then run program without sd saving
-        runWithSD = false;
-
-        //Create visual indicator that data will not be saved
-        for(int i = 0; i < 4;i++)
-        {
-          leds[7+i] = CRGB::Red;
-          FastLED.show();
-        }
-} } } }
+        leds[7+i] = CRGB::Red;
+        FastLED.show();
+      }
+    }
+  }
+}
 
 void loop() {
   unsigned long currentTime = millis();
