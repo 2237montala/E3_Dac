@@ -53,7 +53,6 @@ unsigned long driverTime = 0;
 //Other Settings
 const byte recordSwitch = 6;
 bool stop = false;
-//bool startUp = true;
 const byte leftBut = 8;
 const byte rightBut = 7;
 const byte redLED = 5;
@@ -69,6 +68,9 @@ bool longPressActive = false;
 long buttonHeldTimer = 500;
 long buttonHeldLength = 0;
 
+//Sets how long the recording will be from pressing the steering wheel buttons
+const long recordMenuLen = 15*1000;
+long recordMenuRecAmt = 0; //How long it has been recording
 bool recordMenuOpt = false;
 bool recording = false;
 
@@ -94,20 +96,16 @@ void setup() {
 
   rpmToMphFactor = (60*wheelDia*3.14)/63;
 
-  #ifdef DEBUG
-    Serial.println(rpmToMphFactor);
-  #endif
-
   //analogReference(EXTERNAL);
   //Initialize values in array to -1
-  memset(rpmArray,0,50);
+  memset(rpmArray,0,rpmArrayLen);
 
   pinMode(recordSwitch, INPUT);
   pinMode(leftBut,INPUT);
   pinMode(rightBut,INPUT);
   pinMode(redLED,OUTPUT);
   pinMode(grnLED,OUTPUT);
-  pinMode(2,OUTPUT);
+  //pinMode(2,OUTPUT);
 
   digitalWrite(redLED, HIGH);
   digitalWrite(grnLED, LOW);
@@ -115,8 +113,8 @@ void setup() {
   //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
   FastLED.setBrightness(255* .65);
-  leds[18].red = 255;
-  leds[40].red = 255;
+  //leds[18].red = 255;
+  //leds[40].red = 255;
   FastLED.show();
 
   sevSeg = Adafruit_7segment();
@@ -146,17 +144,18 @@ void setup() {
       FastLED.show();
       digitalWrite(redLED,HIGH);
       delay(1000);
-    }
-    if(digitalRead(leftBut) && digitalRead(rightBut))
-    {
-      //If both buttons are pressed then run program without sd saving
-      runWithSD = false;
 
-      //Create visual indicator that data will not be saved
-      for(int i = 0; i < 4;i++)
+      if(digitalRead(leftBut) && digitalRead(rightBut))
       {
-        leds[7+i] = CRGB::Red;
-        FastLED.show();
+        //If both buttons are pressed then run program without sd saving
+        runWithSD = false;
+
+        //Create visual indicator that data will not be saved
+        for(int i = 0; i < 4;i++)
+        {
+          leds[7+i] = CRGB::Red;
+          FastLED.show();
+        }
       }
     }
   }
@@ -187,10 +186,19 @@ void loop() {
         lapTime = currentTime;
         driverTime = lapTime;
         recording = true;
+
+        if(recordMenuOpt && !digitalRead(recordSwitch))
+        {
+          //The recording command was from the steering wheel
+          recordMenuRecAmt = millis();
+        }
       }
   }
-  else if(!stop && (!digitalRead(recordSwitch) || recordMenuOpt))
+  else if(!stop && (!digitalRead(recordSwitch) || recordMenuOpt)
+          || currentTime - recordMenuRecAmt > recordMenuLen)
     {
+      //To stop recording the record switch has to be off or the steering wheel
+      //buttons had to pressed or the recording amount has been reached for the steering wheel
       #ifdef DEBUG
         Serial.println("Not Recording");
       #endif
