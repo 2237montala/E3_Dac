@@ -118,7 +118,7 @@ void setup() {
   }
   //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(225* .25);
+  FastLED.setBrightness(255* .65);
   leds[18].red = 255;
   leds[40].red = 255;
   FastLED.show();
