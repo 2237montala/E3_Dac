@@ -166,7 +166,7 @@ void loop() {
     if(stop)
       {
         #ifdef DEBUG
-          Serial.println("Recording");
+          //Serial.println("Recording");
         #endif
 
         for(int i = 0; i < 4;i++)
@@ -197,7 +197,7 @@ void loop() {
       //To stop recording the record switch has to be off or the steering wheel
       //buttons had to pressed or the recording amount has been reached for the steering wheel
       #ifdef DEBUG
-        Serial.println("Not Recording");
+        //Serial.println("Not Recording");
       #endif
 
       stop = true;
@@ -320,6 +320,8 @@ void loop() {
     char data = Serial.read();
     if(data == 't') //t for trasnfer
     {
+      //Serial.begin(115200);
+      Serial.println("Ready");
       //Send the contents of the sd card
       //Open base directory
       //See if a file exists
@@ -328,37 +330,53 @@ void loop() {
       SdFile root;
       SdFile file;
 
-      if(!root.open("/"))
+      if(root.open("/"))
       {
-        Serial.println("Cannot open root directory");
-      }
-      while(file.openNext(&root,O_RDONLY))
-      {
-        //While there are still files in the queue
-        char fName[13];
-        char line[25];
-        file.getName(fName,13);
-        if(fName[0]=='d' && fName[1] == 'a')
+        while(file.openNext(&root,O_RDONLY))
         {
-          Serial.println(fName);
-          Serial.println("--------");
-          while(file.fgets(line,sizeof(line))>0)
+          //While there are still files in the queue
+          char fName[13];
+          char line[25];
+          file.getName(fName,13);
+          if(fName[0]=='d' && fName[1] == 'a')
           {
-            Serial.print(line);
+            Serial.println(fName);
+            while(file.fgets(line,sizeof(line))>0)
+            {
+              Serial.print(line);
+            }
+            Serial.println("/");
           }
-          Serial.println("--------");
+          file.close();
+          //
         }
-        file.close();
+        Serial.println("//");
       }
-
+      //Flash leds for error
     }
     else if(data == 'd')
     {
+      Serial.println("Deleting");
+
+      SdFile root;
+      SdFile file;
       //Delete the files on the sd card
-    }
+      if(root.open("/"))
+      {
+        while(file.openNext(&root,O_RDONLY))
+        {
+            char fName[13];
+            file.getName(fName,13);
+            file.close();
+            sd.remove(fName);
+          }
+        }
+      }
+    Serial.println("Done");
     Serial.flush();
   }
 }
+
 
 int getRPM(int pin, int samples)
 {
@@ -404,7 +422,7 @@ void generateFileName(int cs, bool skipSDInit)
     if(!sd.begin(cs,SD_SCK_MHZ(50)))
     {
       #ifdef DEBUG
-        Serial.println("SD cannot be initalized");
+        //Serial.println("SD cannot be initalized");
       #endif
       sdError = true;
     }
@@ -432,12 +450,12 @@ void generateFileName(int cs, bool skipSDInit)
        else
       {
         #ifdef DEBUG
-          Serial.println("Can't create file name");
+          //Serial.println("Can't create file name");
         #endif
       }
     }
     #ifdef DEBUG
-      Serial.println(fileName);
+      //Serial.println(fileName);
     #endif
   }
 }
@@ -596,7 +614,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
       lapTime = millis();
       resetLap = true;
       #ifdef DEBUG
-        Serial.println("lap reset");
+        //Serial.println("lap reset");
       #endif
 
       if(currDisplayMode == 2)
@@ -633,7 +651,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
           currDisplayMode -= 1;
 
         #ifdef DEBUG
-          Serial.println(currDisplayMode);
+          //Serial.println(currDisplayMode);
         #endif
       }
       else if(butRightState)
@@ -644,7 +662,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
           currDisplayMode += 1;
 
         #ifdef DEBUG
-          Serial.println(currDisplayMode);
+          //Serial.println(currDisplayMode);
         #endif
       }
     }
