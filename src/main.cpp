@@ -82,12 +82,8 @@ void writeHeader();
 int updateMPHLED(int start, int numLED, int maxLED, int color);
 int map(int x, int in_min, int in_max, int out_min, int out_max);
 int updateRPMLED(int start, int numLED, int maxLED, int color);
-//int milliToMinSec(long milli);
-//int milliToHourMin(long milli);
 void displayTime(long currTime);
 int checkButtons(int currDisplayMode,int butLeft, int butRight);
-//int calculateTrueEngineRPM(int analogPinValue);
-//int calculateTrueSecondaryRPM(int analogPinValue);
 
 void setup() {
   Serial.begin(115200);
