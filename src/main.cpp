@@ -584,8 +584,10 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     {
       buttonActive = true;
       buttonHeldLength = millis();
+      //Serial.println("Left Pressed");
     }
     butLeftPressed = true;
+    //Serial.println("Left Pressed");
   }
 
   if(butRightState == true)
@@ -595,6 +597,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     {
       buttonActive = true;
       buttonHeldLength = millis();
+      //Serial.println("Right button pressd");
     }
     butRightPressed=true;
   }
@@ -632,7 +635,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     }
   }
 
-  if(buttonActive == true && butLeftState == false && butRightState == false)
+  if(buttonActive == true && (butLeftState == false || butRightState == false))
   {
     //If a button was pressed in the previous loop but now none are pressed
     //Then disable the long press and change the button state vars
@@ -667,6 +670,8 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
       }
     }
 
+    // if(butLeftState) butLeftPressed = false;
+    // if(butRightState) butRightPressed = false;
     buttonActive = false;
     butLeftPressed = false;
     butRightPressed = false;

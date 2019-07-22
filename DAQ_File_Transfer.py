@@ -11,7 +11,7 @@ endLineChar = 'ss'
 numFileTrans = 0
 
 
-ser = serial.Serial(port=portNum,baudrate = baudRate,timeout = 1,write_timeout=1,bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE)
+ser = serial.Serial(port="/dev/ttyUSB0",baudrate = baudRate,timeout = 1,write_timeout=1,bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE)
 ##Option are
 ## t - transfer all csv files
 ## d - delete all csv files
