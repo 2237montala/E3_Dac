@@ -66,11 +66,12 @@ bool butLeftPressed = false;
 bool butRightPressed = false;
 bool buttonActive = false;
 bool longPressActive = false;
-unsigned long buttonHeldTimer = 500;
-unsigned long buttonHeldLength = 0;
+unsigned long buttonHeldTimer = 0;
+unsigned long buttonTriggerLen = 500;
 
 //Sets how long the recording will be from pressing the steering wheel buttons
-const long recordMenuLen = 15*1000;
+#define recordingLenSec 15
+const long recordMenuLen = recordingLenSec*1000;
 long recordMenuRecAmt = 0; //How long it has been recording
 bool recordMenuOpt = false;
 bool recording = false;
@@ -98,14 +99,12 @@ void setup() {
   pinMode(rightBut,INPUT);
   pinMode(redLED,OUTPUT);
   pinMode(grnLED,OUTPUT);
-  //pinMode(2,OUTPUT);
 
   digitalWrite(redLED, HIGH);
   digitalWrite(grnLED, LOW);
 
-  //CFastLED::addLeds<NEOPIXEL,DATA_PIN>(leds,NUM_LEDS);
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  FastLED.setBrightness(255* .65);
+  FastLED.setBrightness(255* .25);
   //leds[18].red = 255;
   //leds[40].red = 255;
   FastLED.show();
@@ -121,7 +120,6 @@ void setup() {
   if(sdError)
   {
     //Card error
-    //Serial.println("SD Error");
     digitalWrite(grnLED,HIGH);
     bool runWithSD = true;
     while(runWithSD)
@@ -157,38 +155,35 @@ void setup() {
 void loop() {
   unsigned long currentTime = millis();
 
-  if(digitalRead(recordSwitch) || recordMenuOpt)
+  if(stop && (digitalRead(recordSwitch) || recordMenuOpt))
   {
-    if(stop)
-      {
-        #ifdef DEBUG
-          //Serial.println("Recording");
-        #endif
+    #ifdef DEBUG
+      Serial.println("Recording");
+    #endif
 
-        for(int i = 0; i < 4;i++)
-        {
-          leds[25+i] = CRGB::Red;
-        }
-        FastLED.show();
+    for(int i = 0; i < 4;i++)
+    {
+      leds[25+i] = CRGB::Red;
+    }
+    FastLED.show();
 
-        dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
-        writeHeader();
-        digitalWrite(grnLED, LOW);
-        digitalWrite(redLED,HIGH);
-        stop = false;
-        lapTime = currentTime;
-        driverTime = lapTime;
-        recording = true;
+    dataFile.open(fileName, O_WRONLY | O_CREAT | O_EXCL);
+    writeHeader();
+    digitalWrite(grnLED, LOW);
+    digitalWrite(redLED,HIGH);
+    stop = false;
+    lapTime = currentTime;
+    driverTime = lapTime;
+    recording = true;
 
-        if(recordMenuOpt && !digitalRead(recordSwitch))
-        {
-          //The recording command was from the steering wheel
-          recordMenuRecAmt = millis();
-        }
-      }
+    if(recordMenuOpt && !digitalRead(recordSwitch))
+    {
+      //The recording command was from the steering wheel
+      recordMenuRecAmt = millis();
+      Serial.println("Sterring wheel record");
+    }
   }
-  else if(!stop && ((!digitalRead(recordSwitch) || recordMenuOpt)
-      || (currentTime - recordMenuRecAmt > recordMenuLen)))
+  else if(!stop && (!digitalRead(recordSwitch) && (!recordMenuOpt  || (currentTime - recordMenuRecAmt > recordMenuLen))))
     {
       //To stop recording the record switch has to be off or the steering wheel
       //buttons had to pressed or the recording amount has been reached for the steering wheel
@@ -198,6 +193,7 @@ void loop() {
 
       stop = true;
       recording = false;
+      recordMenuOpt = false;
       dataFile.close();
 
       //Create a visual indicator
@@ -579,7 +575,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     if(buttonActive == false)
     {
       buttonActive = true;
-      buttonHeldLength = millis();
+      buttonHeldTimer = millis();
       //Serial.println("Left Pressed");
     }
     butLeftPressed = true;
@@ -592,13 +588,13 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     if(buttonActive == false)
     {
       buttonActive = true;
-      buttonHeldLength = millis();
+      buttonHeldTimer = millis();
       //Serial.println("Right button pressd");
     }
     butRightPressed=true;
   }
 
-  if((buttonActive == true && millis() - buttonHeldTimer > buttonHeldLength)
+  if((buttonActive == true && (millis() - buttonHeldTimer > buttonTriggerLen))
       && longPressActive == false)
   {
     //If any button is pressed and the button held timer is greater than the
@@ -631,7 +627,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     }
   }
 
-  if(buttonActive == true && (butLeftState == false || butRightState == false))
+  if(buttonActive == true && (butLeftState == false && butRightState == false))
   {
     //If a button was pressed in the previous loop but now none are pressed
     //Then disable the long press and change the button state vars
@@ -642,7 +638,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
     else
     {
       //Do you short press action
-      if(butLeftState)
+      if(butLeftPressed)
       {
         //Move display left
         //butLeftPressed = true;
@@ -653,7 +649,7 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
           //Serial.println(currDisplayMode);
         #endif
       }
-      else if(butRightState)
+      else if(butRightPressed)
       {
         //Move display right
         //butRightPressed = true;
@@ -666,8 +662,6 @@ int checkButtons(int currDisplayMode,int butLeft, int butRight)
       }
     }
 
-    // if(butLeftState) butLeftPressed = false;
-    // if(butRightState) butRightPressed = false;
     buttonActive = false;
     butLeftPressed = false;
     butRightPressed = false;
