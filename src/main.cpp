@@ -76,6 +76,7 @@ long recordMenuRecAmt = 0; //How long it has been recording
 bool recordMenuOpt = false;
 bool recording = false;
 
+//Rpototyping functions
 int getRPM(int pin, int samples);
 void writeData(int arrayLength);
 void generateFileName(int cs, bool skipSDInit);
