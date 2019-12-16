@@ -2,10 +2,10 @@ import serial
 from time import sleep
 
 ##Open com port
-portNum = "COM8"
+portNum = "/dev/ttyUSB0"
 baudRate = 115200
-transfer = True #If true it delete the csv files on the sd card
-delete = False
+transfer = False #If true it delete the csv files on the sd card
+delete = True
 
 endLineChar = 'ss'
 numFileTrans = 0
